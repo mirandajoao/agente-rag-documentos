@@ -264,7 +264,15 @@ Recursos didáticos e de operação:
 - **Ver o fatiamento** (menu Mais, `GET /api/documentos/fatiamento`): os trechos de um documento, com a sobreposição entre eles destacada.
 - **Semântica × palavra-chave** (em cada resposta, `POST /api/busca/comparar`): o que cada busca da busca híbrida encontrou sozinha, com a nota de cada uma (semelhança e pontuação BM25) e os trechos que aparecem nas duas.
 - **Comparar modelos** (em cada resposta, `POST /api/comparar-modelos`): os mesmos trechos respondidos por dois modelos, com tempo, tokens e custo. Padrão `gpt-4o-mini` × `gpt-4o`; muda com `MODELOS_COMPARACAO=modelo1,modelo2`.
-- **Moderação do painel:** palavrões aparecem mascarados automaticamente. Com `PAINEL_SENHA` definida, o "Modo professor" do painel permite ocultar uma pergunta e limpar o painel (`POST /api/turma/ocultar` e `/api/turma/limpar`).
+- **Modo ministrante** (menu Mais, senha em `MINISTRANTE_SENHA` ou `PAINEL_SENHA`): a senha vai no cabeçalho `X-Ministrante` e é conferida no servidor, com tentativas erradas limitadas por IP. Libera:
+  - **Comparar modelos**, que só ministrantes podem usar porque o modelo maior custa caro.
+  - **Controles de emergência:** pausar novas perguntas e/ou envios. Os alunos veem um aviso e os ministrantes continuam liberados.
+  - **Ajuste do limite de gasto do dia** sem reiniciar.
+  - **Números da turma:** navegadores ativos, perguntas por hora, ataques bloqueados e tipos de arquivo enviados, sem nomes.
+  - **Moderação do painel**, com a mesma senha.
+
+  Rotas: `POST /api/ministrante/entrar`, `GET /api/ministrante/estado` e `POST /api/ministrante/controles`.
+- **Moderação do painel:** palavrões aparecem mascarados automaticamente. Com a senha dos ministrantes definida, o "Modo professor" do painel permite ocultar uma pergunta e limpar o painel (`POST /api/turma/ocultar` e `/api/turma/limpar`).
 - **Resposta em streaming:** o texto aparece palavra por palavra (evento `token` no SSE). Desliga com `STREAM_TOKENS=false`.
 
 **Mais fontes:**

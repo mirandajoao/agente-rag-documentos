@@ -103,6 +103,16 @@ class MapaIn(BaseModel):
     top_k: int | None = Field(None, ge=1, le=12)
 
 
+class MinistranteEntrarIn(BaseModel):
+    senha: str = Field(..., min_length=1, max_length=200)
+
+
+class ControlesIn(BaseModel):
+    perguntas_pausadas: bool | None = None
+    envios_pausados: bool | None = None
+    limite_diario_usd: float | None = Field(None, ge=0, le=50)
+
+
 class ModeracaoIn(BaseModel):
     senha: str = Field(..., min_length=1, max_length=200)
     id: str | None = Field(None, max_length=40)

@@ -91,7 +91,9 @@ def registrar(chave: str | None, pergunta: str, resposta: dict) -> None:
 
 
 def senha_ok(senha: str) -> bool:
-    return bool(settings.painel_senha) and hmac.compare_digest(senha.encode(), settings.painel_senha.encode())
+    from app.controle import senha_ok as ok
+
+    return ok(senha)
 
 
 def ocultar(item_id: str) -> bool:

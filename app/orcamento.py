@@ -44,6 +44,11 @@ class Orcamento:
             self._virar_dia()
             self._gasto += max(0.0, float(usd or 0))
 
+    def ajustar(self, limite_usd: float) -> None:
+        """Muda o teto do dia sem reiniciar (Modo ministrante)."""
+        with self._lock:
+            self.limite = max(0.0, float(limite_usd))
+
     def status(self) -> dict:
         with self._lock:
             self._virar_dia()

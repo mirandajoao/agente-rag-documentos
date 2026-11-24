@@ -158,6 +158,35 @@
 
   /* Modo aula: os bastidores só aparecem quando ele está ligado */
   body:not(.aula) .so-aula { display: none !important; }
+  body:not(.ministrante) .so-ministrante { display: none !important; }
+  .selo-min { font-size: 11px; font-weight: 600; color: var(--brand); border: 1px solid var(--brand); border-radius: 999px; padding: 2px 8px; }
+  .aviso-pausa { font-size: 13px; text-align: center; background: color-mix(in srgb, var(--medio) 16%, transparent); color: var(--ink); border-radius: 12px; padding: 8px 12px; }
+  .dlg-min { width: min(96vw, 640px); }
+  .dlg-min h2 { margin: 0 0 4px; font-size: 18px; }
+  .dlg-min > p { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+  .min-form { display: flex; gap: 8px; }
+  .min-form input { flex: 1; height: 40px; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; background: var(--bg); color: var(--ink); }
+  .min-linha { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .min-linha small { display: block; color: var(--muted); font-size: 12px; }
+  .min-linha input[type=checkbox] { width: 44px; height: 26px; appearance: none; border-radius: 999px; background: #d1d5db; position: relative; cursor: pointer; flex: none; transition: background .2s; }
+  .min-linha input[type=checkbox]::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.25); transition: transform .2s; }
+  .min-linha input[type=checkbox]:checked { background: var(--medio); }
+  .min-linha input[type=checkbox]:checked::after { transform: translateX(18px); }
+  .min-linha form { display: flex; gap: 6px; align-items: center; }
+  .min-linha input[type=number] { width: 90px; height: 34px; border: 1px solid var(--line); border-radius: 10px; padding: 0 8px; background: var(--bg); color: var(--ink); }
+  .min-barra { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 6px; }
+  .min-barra span { display: block; height: 100%; background: var(--brand); }
+  .min-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+  .min-card { background: var(--soft); border-radius: 12px; padding: 8px 10px; }
+  .min-card b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .min-card span { font-size: 11px; color: var(--muted); }
+  .min-horas { display: flex; align-items: flex-end; gap: 8px; height: 110px; padding: 6px 0; }
+  .min-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; font-size: 11px; color: var(--muted); }
+  .min-col i { display: block; width: 100%; min-height: 2px; background: var(--brand); border-radius: 6px 6px 2px 2px; }
+  .min-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .min-acoes button { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 10px; padding: 7px 12px; cursor: pointer; font-size: 13px; }
+  #min-msg { min-height: 1.2em; font-size: 13px; color: var(--brand); margin-top: 8px; }
+  @media (max-width: 560px) { .min-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
   /* Rodapé: documentos + caixa de pergunta */
   .rodape { padding: 6px 0 calc(10px + env(safe-area-inset-bottom)); display: grid; gap: 8px; }
@@ -288,7 +317,7 @@
 <body>
 <div class="app">
   <header class="topo">
-    <h1>Converse com os seus documentos</h1>
+    <h1>Converse com os seus documentos <span class="selo-min" id="selo-min" hidden title="Modo ministrante ativo">ministrante</span></h1>
     <div class="acoes">
       <button class="tema-switch" id="tema" type="button" role="switch" aria-checked="false" aria-label="Tema escuro" title="Tema escuro">
         <svg class="sol" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
@@ -316,6 +345,7 @@
           <button type="button" role="menuitem" id="m-md">Baixar conversa (.md)</button>
           <button type="button" role="menuitem" id="m-pdf">Imprimir / salvar em PDF</button>
           <button type="button" role="menuitem" id="m-guia">Ver o guia rápido</button>
+          <button type="button" role="menuitem" id="m-ministrante" hidden>Modo ministrante</button>
           <hr>
           <div class="menu-info">
             Custo desta sessão: <b id="total">US$ 0,000000</b> · <span id="total-n">0 perguntas</span>
@@ -347,6 +377,7 @@
 
   <div class="rodape">
     <div class="progresso" id="progresso" hidden><span id="progresso-txt"></span><progress id="progresso-barra" max="100"></progress></div>
+    <div class="aviso-pausa" id="aviso-pausa" role="status" hidden></div>
     <div class="docs-msg" id="docs-msg" role="status"></div>
     <details class="lab so-aula" id="lab">
       <summary>Laboratório de parâmetros da busca</summary>
@@ -403,6 +434,30 @@
   <div id="estudo-corpo"></div>
 </dialog>
 
+<dialog class="dlg-min" id="dlg-ministrante" aria-labelledby="min-titulo">
+  <button class="fechar" type="button" data-fechar aria-label="Fechar">×</button>
+  <h2 id="min-titulo">Modo ministrante</h2>
+  <p>Controles só para quem está ministrando a oficina. A senha é conferida no servidor.</p>
+  <div id="min-login">
+    <form class="min-form" id="min-form">
+      <input type="password" id="min-senha" placeholder="Senha dos ministrantes" aria-label="Senha dos ministrantes" autocomplete="current-password" required>
+      <button class="btn" type="submit">Entrar</button>
+    </form>
+  </div>
+  <div id="min-painel" hidden>
+    <div class="min-linha"><label for="min-pausa-perg">Pausar novas perguntas<small>Os alunos veem um aviso; vocês continuam podendo perguntar.</small></label><input type="checkbox" id="min-pausa-perg" role="switch"></div>
+    <div class="min-linha"><label for="min-pausa-env">Pausar envios de arquivos e links<small>Para ninguém enviar documentos agora.</small></label><input type="checkbox" id="min-pausa-env" role="switch"></div>
+    <div class="min-linha"><div>Gasto de hoje: <b id="min-gasto">-</b><div class="min-barra"><span id="min-gasto-barra" style="width:0%"></span></div></div>
+      <form id="min-limite-form"><label for="min-limite" style="font-size:12px;color:var(--muted)">Limite (US$)</label><input type="number" id="min-limite" min="0" max="50" step="0.5"><button class="btn" type="submit">Salvar</button></form></div>
+    <div class="min-cards" id="min-numeros"></div>
+    <div style="font-size:12px;color:var(--muted)">Perguntas por hora</div>
+    <div class="min-horas" id="min-horas"></div>
+    <div id="min-tipos" style="font-size:12px;color:var(--muted)"></div>
+    <div class="min-acoes"><button type="button" id="min-turma">Abrir painel da turma</button><button type="button" id="min-sair">Sair do modo ministrante</button></div>
+  </div>
+  <div id="min-msg" role="status"></div>
+</dialog>
+
 <dialog class="dlg-link" id="dlg-link" aria-labelledby="link-titulo">
   <button class="fechar" type="button" data-fechar aria-label="Fechar">×</button>
   <h2 id="link-titulo" style="margin:0;font-size:18px">Importar página da web</h2>
@@ -438,6 +493,15 @@ const chat = document.getElementById('chat');
 const form = document.getElementById('f');
 const q = document.getElementById('q');
 const btn = document.getElementById('b');
+
+// Senha dos ministrantes: vai no cabeçalho X-Ministrante e é conferida no servidor.
+let senhaMin = '';
+try { senhaMin = sessionStorage.getItem('senha_ministrante') || ''; } catch (_) {}
+function hdrs() {
+  const h = { 'Content-Type': 'application/json' };
+  if (senhaMin) h['X-Ministrante'] = senhaMin;
+  return h;
+}
 
 function novaSessao() {
   const id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()).replace(/[^A-Za-z0-9]/g, '');
@@ -540,6 +604,8 @@ const DICAS = [
   [/não suportado/i, 'Formatos aceitos: PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), CSV, TXT e MD. Também dá para importar uma página da web pelo link.'],
   [/não é uma página de texto|não é público|portas padrão|http:\/\/ ou https/i, 'Use o endereço completo de uma página pública (começando com https://) ou o link direto de um PDF.'],
   [/corrompido|protegido/i, 'Se o PDF tiver senha, tire a proteção (ou use “Imprimir → Salvar como PDF”) e envie de novo.'],
+  [/pausad/i, 'É só aguardar um pouquinho: os ministrantes liberam em instantes.'],
+  [/Só os ministrantes/i, 'Esse recurso fica com os ministrantes da oficina.'],
   [/limite diário/i, 'O limite de gastos da demonstração acabou por hoje. Volte amanhã!'],
   [/Muit[ao]s .*seguid|Muitos envios|Aguarde/i, 'Espere um minutinho e tente de novo.'],
   [/contatar o servidor|conexão|interrompida/i, 'Confira a internet (o Wi-Fi às vezes oscila) e tente de novo.'],
@@ -628,7 +694,7 @@ function acoesDaResposta(box, r, pergunta) {
     const bb = el('button', 'destaque so-aula', 'Semântica × palavra-chave');
     bb.type = 'button'; bb.title = 'Mostra o que cada uma das duas buscas encontrou sozinha';
     bb.addEventListener('click', () => compararBuscas(bb, pergunta));
-    const bmod = el('button', 'destaque so-aula', 'Comparar modelos');
+    const bmod = el('button', 'destaque so-aula so-ministrante', 'Comparar modelos');
     bmod.type = 'button'; bmod.title = 'Os mesmos trechos respondidos por dois modelos, com tempo e custo';
     bmod.addEventListener('click', () => compararModelos(bmod, pergunta));
     acoes.append(bb, bmod);
@@ -815,7 +881,7 @@ async function enviar(texto) {
   try {
     const resp = await fetch('/api/chat/stream', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: hdrs(),
       body: JSON.stringify({ pergunta: texto, sessao_id: sessao, espaco_id: espaco, documento: alvoAtual(), exemplos: mostrarExemplos, parametros: parametrosBusca() }),
       signal: controlador.signal,
     });
@@ -876,7 +942,7 @@ async function comparar(bt, pergunta, r) {
   try {
     const resp = await fetch('/api/comparar', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: hdrs(),
       body: JSON.stringify({ pergunta, sessao_id: sessao }),
     });
     const dados = await resp.json().catch(() => ({}));
@@ -1038,6 +1104,7 @@ function postarComProgresso(fd, aoProgredir) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/documentos');
+    if (senhaMin) xhr.setRequestHeader('X-Ministrante', senhaMin);
     xhr.upload.onprogress = (e) => { if (e.lengthComputable) aoProgredir(e.loaded / e.total); };
     xhr.upload.onload = () => aoProgredir(1);
     xhr.onload = () => {
@@ -1109,7 +1176,7 @@ async function sugerirPerguntas(doc) {
   try {
     const resp = await fetch('/api/documentos/sugestoes', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: hdrs(),
       body: JSON.stringify({ espaco_id: espaco, arquivo: doc.arquivo }),
     });
     if (!resp.ok) return;
@@ -1196,7 +1263,7 @@ document.getElementById('form-link').addEventListener('submit', async (e) => {
   const antes = new Set(docsAtuais.filter(d => !d.exemplo).map(d => d.arquivo));
   try {
     const resp = await fetch('/api/documentos/url', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: hdrs(),
       body: JSON.stringify({ espaco_id: espaco, url, exemplos: mostrarExemplos, tamanho_trecho: tamanhoTrecho() }),
     });
     const dados = await resp.json().catch(() => ({}));
@@ -1230,7 +1297,7 @@ async function abrirMapa(pergunta) {
   if (!dlgMapa.open) dlgMapa.showModal();
   try {
     const resp = await fetch('/api/mapa', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: hdrs(),
       body: JSON.stringify({ espaco_id: espaco, pergunta: pergunta || '', exemplos: mostrarExemplos, top_k: Number(labK.value) }),
     });
     const dados = await resp.json().catch(() => ({}));
@@ -1281,7 +1348,7 @@ function abrirEstudo(titulo, sub) {
   return corpo;
 }
 async function postarJSON(url, corpo) {
-  const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+  const resp = await fetch(url, { method: 'POST', headers: hdrs(), body: JSON.stringify(corpo) });
   const dados = await resp.json().catch(() => ({}));
   if (!resp.ok) throw new Error(detalheErro(dados, resp.status));
   return dados;
@@ -1565,6 +1632,127 @@ document.getElementById('nova').addEventListener('click', () => {
   atualizarInicio();
   q.focus();
 });
+
+// ---------- Modo ministrante ----------
+const dlgMin = document.getElementById('dlg-ministrante');
+let timerMin = null;
+function pintarMinistrante() {
+  const ligado = !!senhaMin;
+  document.body.classList.toggle('ministrante', ligado);
+  document.getElementById('selo-min').hidden = !ligado;
+  document.getElementById('m-ministrante').textContent = ligado ? 'Modo ministrante ✓' : 'Modo ministrante';
+}
+async function chamarMin(url, corpo) {
+  const resp = await fetch(url, corpo === undefined ? { headers: hdrs() } : { method: 'POST', headers: hdrs(), body: JSON.stringify(corpo) });
+  const dados = await resp.json().catch(() => ({}));
+  if (resp.status === 401) { sairMinistrante(); throw new Error('Senha não aceita. Entre de novo.'); }
+  if (!resp.ok) throw new Error(detalheErro(dados, resp.status));
+  return dados;
+}
+function sairMinistrante() {
+  senhaMin = '';
+  try { sessionStorage.removeItem('senha_ministrante'); } catch (_) {}
+  pintarMinistrante();
+  mostrarViewMin();
+}
+function mostrarViewMin() {
+  document.getElementById('min-login').hidden = !!senhaMin;
+  document.getElementById('min-painel').hidden = !senhaMin;
+}
+function pintarEstadoMin(d) {
+  const c = d.controles;
+  document.getElementById('min-pausa-perg').checked = c.perguntas_pausadas;
+  document.getElementById('min-pausa-env').checked = c.envios_pausados;
+  const lim = document.getElementById('min-limite');
+  if (document.activeElement !== lim) lim.value = c.limite_diario_usd;
+  const o = d.orcamento;
+  const pct = o.limite_usd ? Math.min(100, Math.round(o.gasto_hoje_usd / o.limite_usd * 100)) : 0;
+  document.getElementById('min-gasto').textContent = usd(o.gasto_hoje_usd) + (o.limite_usd ? ' de ' + usd(o.limite_usd) + ' (' + pct + '%)' : ' (sem limite)');
+  document.getElementById('min-gasto-barra').style.width = pct + '%';
+  const n = d.numeros;
+  const cards = document.getElementById('min-numeros');
+  cards.replaceChildren();
+  for (const [valor, rotulo] of [[n.navegadores_ativos, 'navegadores ativos'], [n.ultimos_10min, 'perguntas (10 min)'], [n.total, 'perguntas (total)'], [n.bloqueadas, 'ataques bloqueados'], [n.envios_total, 'documentos enviados']]) {
+    const card = el('div', 'min-card'); card.append(el('b', '', fmt(valor)), el('span', '', rotulo)); cards.append(card);
+  }
+  const grafico = document.getElementById('min-horas');
+  grafico.replaceChildren();
+  const maior = Math.max(1, ...n.por_hora.map(h => h.perguntas));
+  for (const h of n.por_hora) {
+    const col = el('div', 'min-col');
+    const barra = el('i'); barra.style.height = Math.round(h.perguntas / maior * 100) + '%';
+    barra.title = h.perguntas + ' pergunta(s) às ' + h.hora;
+    col.append(el('small', '', String(h.perguntas)), barra, el('span', '', h.hora));
+    grafico.append(col);
+  }
+  const tipos = Object.entries(n.envios_por_tipo).sort((a, b) => b[1] - a[1]).map(([t, q]) => t.toUpperCase() + ': ' + q).join(' · ');
+  document.getElementById('min-tipos').textContent = tipos ? 'Tipos enviados: ' + tipos : 'Nenhum documento enviado ainda.';
+}
+async function atualizarMin() {
+  if (!senhaMin || !dlgMin.open) return;
+  try { pintarEstadoMin(await chamarMin('/api/ministrante/estado')); document.getElementById('min-msg').textContent = ''; }
+  catch (e) { document.getElementById('min-msg').textContent = msgErro(e); }
+}
+document.getElementById('m-ministrante').addEventListener('click', () => {
+  mostrarViewMin();
+  document.getElementById('min-msg').textContent = '';
+  dlgMin.showModal();
+  if (senhaMin) atualizarMin(); else document.getElementById('min-senha').focus();
+  clearInterval(timerMin); timerMin = setInterval(atualizarMin, 10000);
+});
+dlgMin.addEventListener('close', () => clearInterval(timerMin));
+document.getElementById('min-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const campo = document.getElementById('min-senha');
+  const senha = campo.value;
+  campo.value = '';
+  const msg = document.getElementById('min-msg');
+  if (/[^\x20-\x7e]/.test(senha)) { msg.textContent = 'Use uma senha sem acentos nem emoji (ela vai num cabeçalho HTTP).'; return; }
+  try {
+    const resp = await fetch('/api/ministrante/entrar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ senha }) });
+    const dados = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(detalheErro(dados, resp.status));
+    senhaMin = senha;
+    try { sessionStorage.setItem('senha_ministrante', senha); } catch (_) {}
+    pintarMinistrante(); mostrarViewMin(); pintarEstadoMin(dados); msg.textContent = '';
+  } catch (err) { msg.textContent = msgErro(err); }
+});
+async function enviarControles(corpo, rotulo) {
+  const msg = document.getElementById('min-msg');
+  try { pintarEstadoMin(await chamarMin('/api/ministrante/controles', corpo)); msg.textContent = rotulo; atualizarInfo(); }
+  catch (e) { msg.textContent = msgErro(e); atualizarMin(); }
+}
+document.getElementById('min-pausa-perg').addEventListener('change', (e) => enviarControles({ perguntas_pausadas: e.target.checked }, e.target.checked ? 'Perguntas pausadas para os alunos (vocês continuam podendo perguntar).' : 'Perguntas liberadas.'));
+document.getElementById('min-pausa-env').addEventListener('change', (e) => enviarControles({ envios_pausados: e.target.checked }, e.target.checked ? 'Envios pausados para os alunos.' : 'Envios liberados.'));
+document.getElementById('min-limite-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const v = Number(document.getElementById('min-limite').value);
+  if (!(v >= 0 && v <= 50)) { document.getElementById('min-msg').textContent = 'Use um valor entre 0 e 50 dólares (0 desliga o limite).'; return; }
+  enviarControles({ limite_diario_usd: v }, 'Limite do dia ajustado para ' + usd(v) + '.');
+});
+document.getElementById('min-sair').addEventListener('click', () => { sairMinistrante(); document.getElementById('min-msg').textContent = 'Você saiu do Modo ministrante.'; });
+document.getElementById('min-turma').addEventListener('click', () => window.open('/turma', '_blank', 'noopener'));
+
+// Aviso de pausa para todos (atualiza a cada 15 s).
+function pintarPausa(c) {
+  const aviso = document.getElementById('aviso-pausa');
+  if (!c) return;
+  const partes = [];
+  if (c.perguntas_pausadas) partes.push('as perguntas');
+  if (c.envios_pausados) partes.push('os envios de documentos');
+  aviso.hidden = !partes.length;
+  aviso.textContent = '⏸ Os ministrantes pausaram ' + partes.join(' e ') + ' por alguns instantes.' + (senhaMin ? ' (Vocês continuam liberados.)' : '');
+}
+function atualizarInfo() {
+  fetch('/api/info').then(r => r.json()).then(i => {
+    pintarUso(i.orcamento);
+    pintarPausa(i.controle);
+    document.getElementById('m-ministrante').hidden = !i.ministrante_disponivel;
+  }).catch(() => {});
+}
+setInterval(atualizarInfo, 15000);
+pintarMinistrante();
+atualizarInfo();
 </script>
 </body>
 </html>
