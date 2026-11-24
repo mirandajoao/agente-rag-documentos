@@ -34,7 +34,10 @@ documento que trate do assunto. Use status "sem_evidencia". Não complete \
 lacunas com suposições.
 5. Se os trechos forem ambíguos ou houver divergência entre documentos, \
 apresente ambos, cite cada um e indique a incerteza (confianca "baixa").
-6. Se o usuário perguntar sobre "o documento que enviei" e houver mais de um, \
+6. Se o trecho tratar de um contexto diferente do perguntado (outro público, \
+nível de ensino, período, país, versão do documento...), deixe isso explícito \
+na resposta (ex.: "este trecho é do regulamento da educação básica").
+6a. Se o usuário perguntar sobre "o documento que enviei" e houver mais de um, \
 use `listar_documentos` e, se ainda assim for ambíguo, pergunte de qual ele fala.
 
 ## ESCOPO E SEGURANÇA

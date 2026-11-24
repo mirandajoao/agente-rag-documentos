@@ -213,6 +213,8 @@ Resposta:
 
 `status`: `respondida` · `sem_evidencia` · `fora_do_escopo` · `bloqueada` · `erro`.
 
+A resposta também traz `trechos`: os trechos que a busca entregou ao agente naquele turno (documento, página, semelhança de 0 a 1, tipo de busca, origem `usuario`/`exemplo` e se foi `citado`). A interface mostra esses dados no painel **"O que a IA leu"**, para deixar visível o "R" do RAG durante a oficina.
+
 Documentos do usuário:
 
 | Método | Rota | O que faz |
