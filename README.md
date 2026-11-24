@@ -283,10 +283,10 @@ Recursos didáticos e de operação:
 **Interface (minimalista):**
 - Uma coluna só, centralizada. A tela inicial mostra a área "arraste um arquivo" e 3 sugestões, e some quando a conversa começa.
 - Caixa de pergunta única: clipe para enviar arquivos (vários de uma vez, com barra de progresso), seletor do documento ("Todos os documentos") e botão redondo de enviar, que vira **parar** durante a resposta.
-- Os documentos aparecem como chips acima da caixa; os de exemplo ficam num chip só, e o × tira os exemplos da tela **e da busca** daquele navegador (`exemplos: false` em `/api/chat`, `/api/chat/stream` e `/api/documentos`). O menu **Mais** traz de volta.
+- Os documentos aparecem como chips acima da caixa; os de exemplo ficam num chip só, e o × tira os exemplos da tela **e da busca** daquele navegador (`exemplos: false` em `/api/chat`, `/api/chat/stream` e `/api/documentos`). Um link ao lado dos documentos ("+ documentos de exemplo") traz de volta.
 - Cada resposta mostra o texto, as fontes (chips com documento e página, que abrem o PDF na página citada) e a bolinha de confiança. Os trechos lidos ficam em "Ver os N trechos".
 - **Modo aula** (menu Mais): mostra os bastidores para a oficina, com os trechos abertos e a frase citada destacada, o custo de cada pergunta, o raciocínio ReAct ao vivo e "Comparar: e se fosse sem RAG?".
-- **Menu Mais (alunos):** modo aula, remover exemplos, baixar a conversa (.md), imprimir/PDF, guia rápido e o custo da sessão. Com o modo aula ligado, aparecem também o mapa dos embeddings, o fatiamento e o "Desafie o agente". O QR code em tela cheia e o uso de hoje (de todos) ficam no Painel do Administrador. Para ampliar no projetor, use o zoom do navegador.
+- **Menu Mais (alunos):** modo aula, baixar a conversa (.md), imprimir/PDF, guia rápido e o custo da sessão. Com o modo aula ligado, aparecem também o mapa dos embeddings, o fatiamento e o "Desafie o agente". O QR code em tela cheia e o uso de hoje (de todos) ficam no Painel do Administrador. Para ampliar no projetor, use o zoom do navegador.
 - Interruptor de tema claro/escuro no topo, estilo iPhone: o ícone vira sol ou lua conforme o tema e, sem escolha salva, segue o sistema.
 - Conversa salva no navegador (volta ao recarregar), erros com dica de solução e atalhos `/` (pergunta) e `Esc` (fecha).
 

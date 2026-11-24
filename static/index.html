@@ -212,7 +212,17 @@
   .anexar { grid-area: anexo; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: none; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
   .anexar:hover { color: var(--brand); border-color: var(--brand); }
   .anexar:disabled { opacity: .5; cursor: wait; }
-  .pilula { grid-area: alvo; max-width: 280px; height: 34px; padding: 0 28px 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 13px; cursor: pointer; }
+  /* Seta própria (a nativa do navegador ficava colada na borda): um "v" desenhado com currentColor, que acompanha o tema */
+  .pilula { grid-area: alvo; max-width: 280px; height: 34px; padding: 0 34px 0 14px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); font-size: 13px; cursor: pointer;
+            appearance: none; -webkit-appearance: none; text-overflow: ellipsis;
+            background-color: var(--card);
+            background-image:
+              linear-gradient(45deg, transparent calc(50% - 0.8px), currentColor calc(50% - 0.8px), currentColor calc(50% + 0.8px), transparent calc(50% + 0.8px)),
+              linear-gradient(-45deg, transparent calc(50% - 0.8px), currentColor calc(50% - 0.8px), currentColor calc(50% + 0.8px), transparent calc(50% + 0.8px));
+            background-position: calc(100% - 20px) 52%, calc(100% - 14px) 52%;
+            background-size: 6px 6px, 6px 6px; background-repeat: no-repeat;
+            field-sizing: content; min-width: 150px; }
+  .pilula:hover { border-color: var(--brand); }
   .pilula.ativo { border-color: var(--brand); color: var(--brand); }
   .enviar { grid-area: enviar; width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--brand); color: var(--brand-ink); display: grid; place-items: center; cursor: pointer; }
   .enviar .parar { display: none; }
@@ -335,7 +345,6 @@
           <button type="button" role="menuitem" class="so-aula" id="m-mapa">Mapa dos embeddings</button>
           <button type="button" role="menuitem" class="so-aula" id="m-fatia">Ver o fatiamento de um documento</button>
           <button type="button" role="menuitem" class="so-aula" id="m-desafio">Desafie o agente</button>
-          <button type="button" role="menuitem" id="m-exemplos">Remover documentos de exemplo</button>
           <hr>
           <button type="button" role="menuitem" id="m-md">Baixar conversa (.md)</button>
           <button type="button" role="menuitem" id="m-pdf">Imprimir / salvar em PDF</button>
@@ -998,18 +1007,12 @@ let limites = { extensoes: ['.md', '.pdf', '.txt'], max_mb: 15 };
 // Documentos de exemplo: o usuário pode tirá-los da tela e da busca (fica salvo neste navegador).
 let mostrarExemplos = true;
 try { mostrarExemplos = localStorage.getItem('exemplos') !== '0'; } catch (_) {}
-const btMenuExemplos = document.getElementById('m-exemplos');
 function aplicarExemplos(mostrar, recarregar = true) {
   mostrarExemplos = mostrar;
   try { localStorage.setItem('exemplos', mostrar ? '1' : '0'); } catch (_) {}
   document.body.classList.toggle('sem-exemplos', !mostrar);
-  btMenuExemplos.textContent = mostrar ? 'Remover documentos de exemplo' : 'Mostrar documentos de exemplo';
   if (recarregar) carregarDocs();
 }
-btMenuExemplos.addEventListener('click', () => {
-  aplicarExemplos(!mostrarExemplos);
-  avisoDocs(mostrarExemplos ? 'Os documentos de exemplo voltaram.' : 'Documentos de exemplo removidos. Agora a busca usa só os seus arquivos.');
-});
 
 let timerAviso = null;
 function avisoDocs(texto, erro) {
@@ -1064,12 +1067,13 @@ function pintarDocs(lista) {
     x.type = 'button';
     x.title = 'Remover os documentos de exemplo';
     x.setAttribute('aria-label', 'Remover os documentos de exemplo');
-    x.addEventListener('click', () => { aplicarExemplos(false); avisoDocs('Exemplos removidos. Para trazer de volta, use o menu Mais.'); });
+    x.addEventListener('click', () => { aplicarExemplos(false); avisoDocs('Exemplos removidos. Para trazer de volta, use o link ao lado dos documentos.'); });
     c.append(x);
     chips.append(c);
   }
-  if (!lista.length && !mostrarExemplos) {
-    const volta = el('button', 'link-btn', 'Usar os documentos de exemplo');
+  if (!mostrarExemplos) {
+    const volta = el('button', 'link-btn', lista.length ? '+ documentos de exemplo' : 'Usar os documentos de exemplo');
+    volta.title = 'Trazer de volta os documentos de exemplo';
     volta.type = 'button';
     volta.style.fontSize = '12px';
     volta.addEventListener('click', () => aplicarExemplos(true));
