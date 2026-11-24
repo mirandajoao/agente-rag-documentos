@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import os
 import threading
+
+from app import persistencia
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -43,11 +45,23 @@ class Orcamento:
         with self._lock:
             self._virar_dia()
             self._gasto += max(0.0, float(usd or 0))
+            dia, gasto = self._dia, self._gasto
+        if usd:
+            persistencia.salvar_gasto(dia, gasto)
 
     def ajustar(self, limite_usd: float) -> None:
         """Muda o teto do dia sem reiniciar (Modo ministrante)."""
         with self._lock:
             self.limite = max(0.0, float(limite_usd))
+        persistencia.salvar_controle("limite_diario_usd", self.limite)
+
+    def restaurar(self, gastos: dict[str, float], limite: float | None) -> None:
+        """Volta o gasto de hoje e o limite ajustado depois de um reinício (vindos do banco)."""
+        with self._lock:
+            self._dia = self._hoje()
+            self._gasto = float(gastos.get(self._dia, 0.0))
+            if limite is not None:
+                self.limite = max(0.0, float(limite))
 
     def status(self) -> dict:
         with self._lock:

@@ -19,6 +19,7 @@ import unicodedata
 import uuid
 from collections import deque
 
+from app import persistencia
 from app.config import settings
 
 _lock = threading.Lock()
@@ -70,15 +71,16 @@ def registrar(chave: str | None, pergunta: str, resposta: dict) -> None:
     pergunta_limpa, m1 = mascarar(pergunta.strip()[:240])
     resposta_limpa, m2 = mascarar((resposta.get("resposta") or "")[:280])
     agora = time.time()
+    navegador = hashlib.sha1(chave.encode()).hexdigest()[:10] if chave else None
     with _lock:
-        if chave:
-            _ativos[hashlib.sha1(chave.encode()).hexdigest()[:10]] = agora
+        if navegador:
+            _ativos[navegador] = agora
         _totais["perguntas"] += 1
         _totais["respondidas"] += status == "respondida"
         _totais["bloqueadas"] += status == "bloqueada"
         _totais["recusadas"] += status in {"sem_evidencia", "fora_do_escopo"}
         _totais["custo_usd"] += custo
-        _recentes.appendleft({
+        item = {
             "id": uuid.uuid4().hex[:10],
             "hora": agora,
             "pergunta": pergunta_limpa,
@@ -87,7 +89,9 @@ def registrar(chave: str | None, pergunta: str, resposta: dict) -> None:
             "confianca": resposta.get("confianca"),
             "fontes": citados[:3],
             "moderada": m1 or m2,
-        })
+        }
+        _recentes.appendleft(item)
+    persistencia.salvar_pergunta_painel(item, navegador, custo)
 
 
 def senha_ok(senha: str) -> bool:
@@ -101,8 +105,11 @@ def ocultar(item_id: str) -> bool:
         for i, item in enumerate(_recentes):
             if item["id"] == item_id:
                 del _recentes[i]
-                return True
-    return False
+                break
+        else:
+            return False
+    persistencia.ocultar_pergunta_painel(item_id)
+    return True
 
 
 def limpar() -> None:
@@ -111,6 +118,27 @@ def limpar() -> None:
         _ativos.clear()
         for k in _totais:
             _totais[k] = 0.0 if k == "custo_usd" else 0
+    persistencia.salvar_controle("painel_limpo_em", time.time())
+
+
+def restaurar(linhas: list[dict]) -> None:
+    """Perguntas salvas no banco (desde a última limpeza), em ordem de horário."""
+    with _lock:
+        _recentes.clear()
+        _ativos.clear()
+        for k in _totais:
+            _totais[k] = 0.0 if k == "custo_usd" else 0
+        for r in linhas:
+            status = r.get("status")
+            _totais["perguntas"] += 1
+            _totais["respondidas"] += status == "respondida"
+            _totais["bloqueadas"] += status == "bloqueada"
+            _totais["recusadas"] += status in {"sem_evidencia", "fora_do_escopo"}
+            _totais["custo_usd"] += float(r.get("custo_usd") or 0)
+            if r.get("navegador"):
+                _ativos[r["navegador"]] = max(_ativos.get(r["navegador"], 0), r["hora"])
+            if not r.get("oculta"):
+                _recentes.appendleft({k: r[k] for k in ("id", "hora", "pergunta", "resposta", "status", "confianca", "fontes", "moderada")})
 
 
 def estado() -> dict:

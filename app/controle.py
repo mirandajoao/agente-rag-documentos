@@ -15,6 +15,7 @@ from collections import Counter, deque
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from app import persistencia
 from app.config import settings
 
 _lock = threading.Lock()
@@ -45,17 +46,38 @@ def atualizar(perguntas_pausadas: bool | None = None, envios_pausados: bool | No
             _estado["perguntas_pausadas"] = perguntas_pausadas
         if envios_pausados is not None:
             _estado["envios_pausados"] = envios_pausados
-        return dict(_estado)
+        atual = dict(_estado)
+    if perguntas_pausadas is not None:
+        persistencia.salvar_controle("perguntas_pausadas", perguntas_pausadas)
+    if envios_pausados is not None:
+        persistencia.salvar_controle("envios_pausados", envios_pausados)
+    return atual
 
 
 def registrar_pergunta() -> None:
+    agora = time.time()
     with _lock:
-        _perguntas.append(time.time())
+        _perguntas.append(agora)
+    persistencia.salvar_evento("pergunta", hora=agora)
 
 
 def registrar_envio(extensao: str) -> None:
+    tipo = extensao.lower().lstrip(".") or "?"
     with _lock:
-        _envios[extensao.lower().lstrip(".") or "?"] += 1
+        _envios[tipo] += 1
+    persistencia.salvar_evento("envio", tipo)
+
+
+def restaurar(controles: dict, perguntas: list[float], envios: dict[str, int]) -> None:
+    """Estado salvo no banco, aplicado quando o servidor sobe."""
+    with _lock:
+        for chave in ("perguntas_pausadas", "envios_pausados"):
+            if chave in controles:
+                _estado[chave] = bool(controles[chave])
+        _perguntas.clear()
+        _perguntas.extend(perguntas)
+        _envios.clear()
+        _envios.update(envios)
 
 
 def numeros(horas: int = 6) -> dict:

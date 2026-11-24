@@ -35,3 +35,6 @@ httpx>=0.27           # download das páginas da web
 pypdfium2>=4.30       # renderiza páginas de PDF escaneado para o OCR
 pytesseract>=0.3.10   # OCR (precisa do tesseract-ocr instalado: ver Dockerfile)
 pillow>=10.0
+
+# --- Persistência opcional (DATABASE_URL, ex.: Neon) ---
+psycopg[binary]>=3.2

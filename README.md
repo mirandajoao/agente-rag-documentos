@@ -280,6 +280,8 @@ Recursos didáticos e de operação:
 - **Planilhas** `.xlsx` e `.csv`: cada linha vira "Coluna: valor | ..." e a "página" citada é um bloco de 40 linhas (`MAX_LINHAS_PLANILHA=3000`).
 - **Página da web pelo link** (`POST /api/documentos/url`): baixa só endereços públicos (proteção contra SSRF: IPs privados, locais e reservados são recusados, inclusive após redirecionamentos), até 8 MB, e extrai o texto principal sem menu nem scripts. Links diretos de PDF também funcionam.
 
+**Persistência opcional (Postgres, ex.: Neon):** com `DATABASE_URL` definida, o uso do dia, o limite ajustado, as pausas, o painel da turma (perguntas, ocultas e limpeza) e os números do administrador **sobrevivem a deploys e reinícios**. As tabelas são criadas sozinhas na primeira subida. Durante a execução tudo continua em memória e cada mudança é gravada em segundo plano; sem banco, ou com o banco fora do ar, o app segue só em memória, como antes. Os documentos e embeddings continuam no ChromaDB (a migração para pgvector é a próxima etapa).
+
 **Interface (minimalista):**
 - Uma coluna só, centralizada. A tela inicial mostra a área "arraste um arquivo" e 3 sugestões, e some quando a conversa começa.
 - Caixa de pergunta única: clipe para enviar arquivos (vários de uma vez, com barra de progresso), seletor do documento ("Todos os documentos") e botão redondo de enviar, que vira **parar** durante a resposta.
