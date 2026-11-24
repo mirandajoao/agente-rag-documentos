@@ -82,7 +82,8 @@ async def chat(dados: PerguntaIn, request: Request) -> RespostaOut:
     if not ESTADO["pronto"]:
         raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
     # O agente é síncrono; rodar em threadpool evita travar o event loop.
-    return await run_in_threadpool(perguntar, dados.pergunta, dados.sessao_id, dados.espaco_id)
+    documento = dados.documento.model_dump() if dados.documento else None
+    return await run_in_threadpool(perguntar, dados.pergunta, dados.sessao_id, dados.espaco_id, documento)
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +137,7 @@ async def enviar_documento(
     nome = _nome_seguro(arquivo.filename or "")
     ext = Path(nome).suffix.lower()
     if ext not in EXTENSOES_ACEITAS:
-        raise HTTPException(415, "Formato não suportado. Envie um arquivo PDF, TXT ou MD.")
+        raise HTTPException(415, "Formato não suportado. Envie um arquivo PDF, DOCX, PPTX, TXT ou MD.")
 
     # Lê no máximo o limite + 1 byte: arquivo maior é recusado sem ocupar memória à toa.
     limite = settings.max_upload_mb * 1024 * 1024
@@ -147,6 +148,8 @@ async def enviar_documento(
         raise HTTPException(422, "O arquivo está vazio.")
     if ext == ".pdf" and not conteudo.startswith(b"%PDF"):
         raise HTTPException(415, "O arquivo não parece ser um PDF válido.")
+    if ext in {".docx", ".pptx"} and not conteudo.startswith(b"PK"):
+        raise HTTPException(415, "O arquivo não parece ser um documento do Office válido (.docx/.pptx). Arquivos .doc/.ppt antigos precisam ser salvos no formato novo.")
 
     existentes = await run_in_threadpool(documentos_do_espaco, espaco_id, False)
     if nome not in {d["arquivo"] for d in existentes} and len(existentes) >= settings.max_documentos_por_espaco:
@@ -235,6 +238,11 @@ ICONES = {
     "apple-touch-icon.png": "image/png",
     "icon-512.png": "image/png",
 }
+
+
+@app.get("/como-funciona", include_in_schema=False)
+def como_funciona():
+    return FileResponse(STATIC / "como-funciona.html")
 
 
 @app.get("/{nome}", include_in_schema=False)

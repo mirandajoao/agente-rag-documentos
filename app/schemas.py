@@ -53,11 +53,20 @@ class Custo(BaseModel):
 ID_PATTERN = r"^[A-Za-z0-9_-]+$"
 
 
+class DocumentoAlvo(BaseModel):
+    """Documento escolhido no seletor "Perguntar sobre" (None = todos)."""
+
+    arquivo: str = Field(..., min_length=1, max_length=120, pattern=r"^[A-Za-z0-9_.-]+$")
+    documento: str = Field("", max_length=200)
+    exemplo: bool = False
+
+
 class PerguntaIn(BaseModel):
     pergunta: str = Field(..., min_length=1)
     sessao_id: str = Field(..., min_length=8, max_length=64, pattern=ID_PATTERN)
     # Espaço de documentos do usuário (fica igual entre conversas no mesmo navegador).
     espaco_id: str | None = Field(None, min_length=8, max_length=64, pattern=ID_PATTERN)
+    documento: DocumentoAlvo | None = None
 
 
 class DocumentoOut(BaseModel):
@@ -65,6 +74,7 @@ class DocumentoOut(BaseModel):
     arquivo: str
     exemplo: bool = False
     trechos: int = 0
+    paginas: int = 0
 
 
 class DocumentosOut(BaseModel):
@@ -79,7 +89,7 @@ class TrechoLido(BaseModel):
     documento: str
     pagina: int | None = None
     relevancia: float | None = Field(None, description="Semelhança de 0 a 1 (só na busca semântica)")
-    tipo_busca: Literal["semântica", "lexical"] = "semântica"
+    tipo_busca: Literal["semântica", "lexical", "resumo"] = "semântica"
     origem: Literal["usuario", "exemplo"] = "usuario"
     texto: str = ""
     citado: bool = False

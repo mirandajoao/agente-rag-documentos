@@ -30,7 +30,7 @@ from app.custos import calcular_custo
 from app.guardrails import citacao_foi_recuperada, validar_pergunta
 from app.prompts import SYSTEM_PROMPT
 from app.schemas import Custo, PassoReAct, RespostaAgente, RespostaOut, TrechoLido
-from app.tools import FERRAMENTAS
+from app.tools import FERRAMENTAS, consumir_uso_extra
 
 log = logging.getLogger("agente")
 
@@ -155,10 +155,10 @@ def extrair_trechos(turno: list[BaseMessage], resp: RespostaAgente) -> list[Trec
     trechos: list[TrechoLido] = []
     vistos: set[tuple[str, int, str]] = set()
     for msg in turno:
-        if not isinstance(msg, ToolMessage) or msg.name != "buscar_documentos":
+        if not isinstance(msg, ToolMessage) or msg.name not in {"buscar_documentos", "resumir_documento"}:
             continue
         for bloco in _texto(msg).split("\n\n---\n\n"):
-            m = RE_CABECALHO_TRECHO.match(bloco)
+            m = RE_CABECALHO_TRECHO.search(bloco)
             if not m:
                 continue
             corpo = bloco[m.end():].strip()
@@ -173,7 +173,7 @@ def extrair_trechos(turno: list[BaseMessage], resp: RespostaAgente) -> list[Trec
                     documento=m["doc"],
                     pagina=int(m["pag"]),
                     relevancia=max(0.0, min(1.0, float(numero.group()))) if rel.startswith("semântica") and numero else None,
-                    tipo_busca="semântica" if rel.startswith("semântica") else "lexical",
+                    tipo_busca="semântica" if rel.startswith("semântica") else ("resumo" if rel.startswith("resumo") else "lexical"),
                     origem="exemplo" if (m["origem"] or "").strip() == "exemplo" else "usuario",
                     texto=corpo if len(corpo) <= 700 else corpo[:697] + "...",
                     citado=any(m["doc"] == d and (p is None or int(p) == int(m["pag"])) for d, p in citados),
@@ -229,7 +229,7 @@ def _erro(sessao_id: str, mensagem: str, status: str = "erro") -> RespostaOut:
     return RespostaOut(sessao_id=sessao_id, resposta=mensagem, status=status, confianca="baixa", custo=custo)
 
 
-def perguntar(pergunta: str, sessao_id: str, espaco_id: str | None = None) -> RespostaOut:
+def perguntar(pergunta: str, sessao_id: str, espaco_id: str | None = None, documento: dict | None = None) -> RespostaOut:
     validacao = validar_pergunta(pergunta)
     if not validacao.ok:
         log.info("[%s] entrada bloqueada: %s", sessao_id, validacao.motivo)
@@ -238,13 +238,18 @@ def perguntar(pergunta: str, sessao_id: str, espaco_id: str | None = None) -> Re
     # thread_id = memória da conversa; espaco_id = quais documentos enviados esta pessoa pode consultar.
     # O espaço vai pelo config (e não pela pergunta), então o modelo não consegue trocá-lo.
     config = {
-        "configurable": {"thread_id": sessao_id, "espaco_id": espaco_id or ""},
+        "configurable": {"thread_id": sessao_id, "espaco_id": espaco_id or "", "documento": documento or None},
         "recursion_limit": settings.recursion_limit,
     }
+    texto = validacao.texto
+    if documento and documento.get("arquivo"):
+        # Contexto visível ao modelo; a restrição de fato é aplicada pelas ferramentas.
+        nome = documento.get("documento") or documento["arquivo"]
+        texto = f"[O usuário escolheu na interface o documento «{nome}» para esta pergunta.]\n{texto}"
 
     try:
         agente = construir_agente()
-        estado = agente.invoke({"messages": [HumanMessage(validacao.texto)]}, config=config)
+        estado = agente.invoke({"messages": [HumanMessage(texto)]}, config=config)
     except RuntimeError as exc:  # chave ausente
         log.error("Configuração inválida: %s", exc)
         return _erro(sessao_id, "O assistente não está configurado (chave de API ausente).")
@@ -274,7 +279,7 @@ def perguntar(pergunta: str, sessao_id: str, espaco_id: str | None = None) -> Re
 
     resp, avisos = interpretar_resposta_final(_texto(final) if final else "")
     avisos += verificar_citacoes(resp, observacoes_sessao)
-    custo = calcular_custo(turno)
+    custo = calcular_custo(turno, consumir_uso_extra(sessao_id))
     log.info(
         "[%s] CUSTO %d chamadas | %d in (%d cache) | %d out | %d emb | US$ %.6f",
         sessao_id, custo.chamadas_llm, custo.tokens_entrada, custo.tokens_entrada_cache,

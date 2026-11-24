@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Como funciona · Converse com os seus documentos</title>
+<meta name="theme-color" content="#2f5bff">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<style>
+  :root {
+    --bg: #f2f4f8; --card: #ffffff; --ink: #0b1530; --muted: #4a5571; --line: #dce1ea;
+    --brand: #2f5bff; --brand-ink: #ffffff; --soft: #e7edff; --mark: #e4ff3a; --warn: #b42318; --ok: #0f7a4f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1220; --card: #151c2e; --ink: #e8ecf5; --muted: #a2acc2; --line: #273049;
+      --brand: #6b8cff; --brand-ink: #0b1530; --soft: #1c2647; --warn: #ff8a80; --ok: #5fd3a2; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.55; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px 56px; }
+  header { padding: 18px 0 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  header .marca { font-weight: 700; color: var(--ink); text-decoration: none; }
+  .voltar { background: var(--brand); color: var(--brand-ink); text-decoration: none; font-weight: 600; border-radius: 10px; padding: 10px 14px; min-height: 44px; display: inline-flex; align-items: center; }
+  h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.1; letter-spacing: -0.02em; margin: 36px 0 12px; }
+  h1 mark { background: var(--mark); color: #0b1530; padding: 0 8px; border-radius: 6px; }
+  .lead { font-size: 18px; color: var(--muted); max-width: 760px; margin: 0; }
+  h2 { font-size: 24px; margin: 48px 0 6px; letter-spacing: -0.01em; }
+  h2 + p { margin: 0 0 18px; color: var(--muted); max-width: 760px; }
+  .duas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  .card h3 { margin: 0 0 8px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); }
+  .card.ruim { border-top: 4px solid var(--warn); }
+  .card.bom { border-top: 4px solid var(--ok); }
+  .fala { margin-top: 12px; background: var(--bg); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+  .fala b { color: var(--ink); }
+  ol.fluxo { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 28px 32px; counter-reset: passo; }
+  ol.fluxo li { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; counter-increment: passo; }
+  ol.fluxo li::before { content: counter(passo); display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--brand); color: var(--brand-ink); font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+  ol.fluxo li:not(:last-child)::after { content: "→"; position: absolute; right: -24px; top: 50%; transform: translateY(-50%); color: var(--brand); font-size: 20px; font-weight: 700; }
+  ol.fluxo h3 { margin: 0 0 4px; font-size: 16px; }
+  ol.fluxo p { margin: 0; font-size: 14px; color: var(--muted); }
+  ol.fluxo code { font-size: 12px; background: var(--soft); padding: 1px 6px; border-radius: 6px; }
+  @media (max-width: 640px) {
+    .duas { grid-template-columns: 1fr; }
+    ol.fluxo li:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -26px; transform: translateX(-50%); }
+  }
+  .exemplo-vetor { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: var(--card); border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; margin-top: 18px; overflow-x: auto; white-space: nowrap; }
+  .grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+  .grade .card h3 { font-size: 16px; }
+  .termo { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--brand); margin-bottom: 4px; }
+  .techs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .techs span { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: 14px; }
+  footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="marca" href="/">Converse com os seus documentos</a>
+    <a class="voltar" href="/">Voltar e testar</a>
+  </header>
+
+  <h1>Como a IA conversa com os <mark>seus documentos</mark></h1>
+  <p class="lead">Este agente usa <b>RAG</b> (Retrieval-Augmented Generation, ou geração aumentada por recuperação): antes de responder, ele <b>busca</b> nos seus arquivos os trechos que tratam da pergunta e só então <b>escreve</b> a resposta, mostrando de onde tirou cada informação.</p>
+
+  <h2>O problema que o RAG resolve</h2>
+  <p>Modelos de linguagem (LLMs), como os que estão por trás do ChatGPT, aprendem com textos da internet até uma certa data. Eles não conhecem a sua apostila, o seu contrato ou o seu relatório e, quando não sabem, às vezes inventam.</p>
+  <div class="duas">
+    <div class="card ruim">
+      <h3>Sem RAG</h3>
+      <p>O modelo responde de memória. Se a informação não estava no treinamento, ele pode "chutar" uma resposta convincente, mas errada. Isso se chama <b>alucinação</b>.</p>
+      <div class="fala"><b>Pergunta:</b> Qual a carga horária da oficina?<br><b>IA:</b> Normalmente oficinas têm 4 horas. <i>(inventado)</i></div>
+    </div>
+    <div class="card bom">
+      <h3>Com RAG</h3>
+      <p>O agente procura nos documentos, lê os trechos encontrados e responde só com base neles. Se não encontrar, ele diz que não encontrou.</p>
+      <div class="fala"><b>Pergunta:</b> Qual a carga horária da oficina?<br><b>IA:</b> 3 horas (180 minutos). <i>Fonte: proposta da oficina, p. 1</i></div>
+    </div>
+  </div>
+
+  <h2>1. Quando você envia um documento</h2>
+  <p>O arquivo passa por uma "preparação" que acontece uma vez só, em poucos segundos.</p>
+  <ol class="fluxo">
+    <li><h3>Leitura</h3><p>O texto é extraído do PDF, Word, PowerPoint ou TXT, página por página (ou slide por slide).</p></li>
+    <li><h3>Fatiamento</h3><p>O texto é dividido em trechos de cerca de <code>1.200</code> caracteres, respeitando parágrafos e seções.</p></li>
+    <li><h3>Embeddings</h3><p>Cada trecho vira uma lista de <code>1.536</code> números que representa o seu <b>significado</b>.</p></li>
+    <li><h3>Banco vetorial</h3><p>Os vetores ficam guardados no ChromaDB, junto com o nome do documento e a página.</p></li>
+  </ol>
+  <div class="exemplo-vetor" aria-label="Exemplo de embedding">"A carga horária da oficina é de 3 horas" → [0.021, -0.113, 0.087, 0.004, …, -0.052] <span style="color:var(--muted)">(1.536 números)</span></div>
+
+  <h2>2. Quando você faz uma pergunta</h2>
+  <p>O agente segue o ciclo <b>ReAct</b>: pensa no que precisa, age usando uma ferramenta, observa o resultado e só então responde. Você vê esse raciocínio embaixo de cada resposta.</p>
+  <ol class="fluxo">
+    <li><h3>Pensar</h3><p>O agente reescreve a pergunta com as palavras que provavelmente aparecem no documento.</p></li>
+    <li><h3>Buscar</h3><p>A pergunta também vira um vetor. A busca traz os trechos de significado mais parecido e os que têm as mesmas palavras-chave.</p></li>
+    <li><h3>Ler</h3><p>Os trechos encontrados aparecem no painel <b>"O que a IA leu"</b>, com a porcentagem de semelhança.</p></li>
+    <li><h3>Responder</h3><p>O modelo escreve a resposta usando só esses trechos e cita o documento e a página.</p></li>
+    <li><h3>Conferir</h3><p>O sistema verifica se cada citação veio mesmo da busca. Citação inventada é descartada.</p></li>
+  </ol>
+
+  <h2>As proteções contra respostas erradas</h2>
+  <p>Um agente confiável precisa saber quando <b>não</b> responder.</p>
+  <div class="grade">
+    <div class="card"><h3>"Não encontrei"</h3><p>Se nenhum trecho for parecido o suficiente com a pergunta, o agente admite que os documentos não tratam do assunto.</p></div>
+    <div class="card"><h3>Citações verificadas</h3><p>Toda fonte citada precisa ter aparecido na busca. Caso contrário, a citação é removida e a confiança cai.</p></div>
+    <div class="card"><h3>Prompt injection</h3><p>Tentativas como "ignore as suas regras" são bloqueadas, e instruções escondidas dentro dos documentos são tratadas como texto, não como ordens.</p></div>
+    <div class="card"><h3>Cada um com os seus arquivos</h3><p>Os documentos que você envia ficam só no seu espaço. Outras pessoas não conseguem consultá-los.</p></div>
+  </div>
+
+  <h2>Glossário rápido</h2>
+  <p>Os termos que aparecem durante a oficina.</p>
+  <div class="grade">
+    <div class="card"><span class="termo">LLM</span><p>Large Language Model: modelo treinado com muito texto para prever e gerar linguagem. Aqui usamos o gpt-4o-mini, da OpenAI.</p></div>
+    <div class="card"><span class="termo">Embedding</span><p>Representação de um texto como uma lista de números. Textos com sentido parecido ficam com números parecidos.</p></div>
+    <div class="card"><span class="termo">Banco vetorial</span><p>Banco de dados feito para guardar embeddings e encontrar rapidamente os mais próximos de uma pergunta.</p></div>
+    <div class="card"><span class="termo">Busca semântica</span><p>Busca pelo significado, e não pela palavra exata: uma pergunta sobre "carro" encontra um trecho que fala de "automóvel".</p></div>
+    <div class="card"><span class="termo">Busca por palavra-chave</span><p>O algoritmo BM25 encontra trechos com os termos exatos, como siglas, nomes e números.</p></div>
+    <div class="card"><span class="termo">Agente</span><p>Um LLM que pode usar ferramentas (buscar, listar, resumir) e decide sozinho qual usar em cada passo.</p></div>
+    <div class="card"><span class="termo">Tokens</span><p>Pedaços de palavras que o modelo processa. A API cobra por token, e por isso cada resposta mostra o seu custo.</p></div>
+    <div class="card"><span class="termo">Alucinação</span><p>Quando a IA gera uma informação falsa com aparência de verdadeira. O RAG existe para reduzir isso.</p></div>
+  </div>
+
+  <h2>Tecnologias usadas</h2>
+  <p>Tudo o que você vê roda com ferramentas abertas e uma API de IA.</p>
+  <div class="techs">
+    <span>Python</span><span>LLMs (gpt-4o-mini)</span><span>OpenAI Embeddings</span><span>LangChain + LangGraph</span><span>ChromaDB</span><span>FastAPI</span><span>Docker</span><span>Railway</span>
+  </div>
+
+  <footer>
+    <span>Oficina "Converse com os seus documentos" · VIII SIEPEX · IFPA Campus Ananindeua</span>
+    <a class="voltar" href="/">Testar com um documento</a>
+  </footer>
+</div>
+</body>
+</html>

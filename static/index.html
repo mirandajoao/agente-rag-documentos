@@ -62,7 +62,19 @@
   .step { margin: 6px 0; padding: 6px 10px; border-radius: 8px; background: var(--bg); font-family: ui-monospace, Consolas, monospace; font-size: 12px; white-space: pre-wrap; max-height: 220px; overflow: auto; }
   .step .k { font-weight: 700; }
   .thought .k { color: var(--thought); } .action .k { color: var(--action); } .observation .k { color: var(--obs); }
-  form { display: flex; gap: 8px; padding: 12px 0 18px; border-top: 1px solid var(--line); }
+  form { display: flex; gap: 8px; padding: 8px 0 18px; }
+  .alvo { display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+  .alvo select { flex: 1 1 220px; min-width: 0; max-width: 100%; min-height: 36px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-size: 13px; }
+  .alvo select.ativo { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+  .acoes { display: flex; gap: 8px; align-items: center; }
+  .acoes a { color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; text-decoration: none; white-space: nowrap; }
+  .acoes a:hover { color: var(--brand); border-color: var(--brand); }
+  @media (max-width: 560px) {
+    header { flex-wrap: wrap; }
+    header > div:first-child { flex: 1 1 100%; }
+    .acoes { width: 100%; }
+    .acoes a, .acoes button { flex: 1; text-align: center; min-height: 40px; }
+  }
   textarea { flex: 1; resize: none; min-height: 46px; max-height: 140px; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; }
   form button { background: var(--brand); color: var(--brand-ink); border: 0; border-radius: 10px; padding: 0 18px; font: inherit; font-weight: 600; cursor: pointer; }
   form button:disabled { opacity: .5; cursor: wait; }
@@ -110,14 +122,17 @@
       <h1>Converse com os seus documentos</h1>
       <p>Agente RAG · respostas só com base nos documentos, sempre citando a fonte</p>
     </div>
-    <button id="nova" type="button">Nova conversa</button>
+    <div class="acoes">
+      <a href="/como-funciona">Como funciona</a>
+      <button id="nova" type="button">Nova conversa</button>
+    </div>
   </header>
 
   <section class="docs" aria-label="Seus documentos">
     <div class="docs-top">
-      <b>Seus documentos<small>PDF, TXT ou MD · você também pode arrastar o arquivo para cá</small></b>
+      <b>Seus documentos<small>PDF, Word, PowerPoint, TXT ou MD · você também pode arrastar o arquivo para cá</small></b>
       <button class="btn-up" id="btn-up" type="button">+ Enviar documento</button>
-      <input type="file" id="arquivo" accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" hidden>
+      <input type="file" id="arquivo" accept=".pdf,.docx,.pptx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown" hidden>
     </div>
     <div class="chips" id="chips"></div>
     <div class="docs-msg" id="docs-msg" role="status"></div>
@@ -134,13 +149,17 @@
 Ainda não tem um arquivo? Teste com os documentos de exemplo do IFPA que já estão carregados.</div>
       <div class="sugs" style="margin-top:10px">
         <button>Quais documentos você conhece?</button>
-        <button>Quais são os principais pontos do documento que enviei?</button>
+        <button>Resuma o documento que enviei</button>
         <button>Qual a frequência mínima para ser aprovado no IFPA?</button>
         <button>Quantas horas de estágio o curso de Ciência da Computação exige?</button>
       </div>
     </div>
   </main>
 
+  <div class="alvo">
+    <label for="alvo">Perguntar sobre</label>
+    <select id="alvo"><option value="">Todos os documentos</option></select>
+  </div>
   <form id="f">
     <textarea id="q" placeholder="Pergunte algo sobre os seus documentos..." maxlength="1000" required></textarea>
     <button id="b" type="submit">Enviar</button>
@@ -251,7 +270,7 @@ function renderResposta(r) {
         barra.append(el('span', '', 'semelhança'), trilho, el('span', '', pct + '%'));
         top.append(barra);
       } else {
-        top.append(el('span', 'selo', 'palavra-chave'));
+        top.append(el('span', 'selo', t.tipo_busca === 'resumo' ? 'documento inteiro' : 'palavra-chave'));
       }
       c.append(top, el('p', '', t.texto));
       if (i < visiveis) { det.append(c); return; }
@@ -300,7 +319,7 @@ async function enviar(texto) {
     const resp = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pergunta: texto, sessao_id: sessao, espaco_id: espaco }),
+      body: JSON.stringify({ pergunta: texto, sessao_id: sessao, espaco_id: espaco, documento: alvoAtual() }),
     });
     const dados = await resp.json().catch(() => ({}));
     typing.remove();
@@ -347,7 +366,26 @@ function avisoDocs(texto, erro) {
   docsMsg.className = 'docs-msg' + (erro ? ' erro' : '');
 }
 
+// Seletor "Perguntar sobre": restringe a busca a um documento.
+const seletor = document.getElementById('alvo');
+let docsAtuais = [];
+function alvoAtual() {
+  const d = docsAtuais[Number(seletor.value)];
+  return seletor.value === '' || !d ? null : { arquivo: d.arquivo, documento: d.documento, exemplo: !!d.exemplo };
+}
+function pintarSeletor(lista) {
+  const anterior = alvoAtual();
+  docsAtuais = lista;
+  seletor.replaceChildren(new Option('Todos os documentos', ''));
+  lista.forEach((d, i) => seletor.append(new Option((d.exemplo ? 'Exemplo: ' : '') + d.documento, String(i))));
+  const i = anterior ? lista.findIndex(d => d.arquivo === anterior.arquivo && !!d.exemplo === anterior.exemplo) : -1;
+  seletor.value = i >= 0 ? String(i) : '';
+  seletor.classList.toggle('ativo', seletor.value !== '');
+}
+seletor.addEventListener('change', () => seletor.classList.toggle('ativo', seletor.value !== ''));
+
 function pintarDocs(lista) {
+  pintarSeletor(lista);
   chips.replaceChildren();
   const meus = lista.filter(d => !d.exemplo), exemplos = lista.filter(d => d.exemplo);
   for (const d of meus) {

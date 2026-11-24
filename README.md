@@ -2,7 +2,7 @@
 
 Oficina **"Converse com os seus documentos"** · VIII SIEPEX 2026 · IFPA Campus Ananindeua · por João Vitor Miranda e Ilard Lamarão
 
-Agente de IA que responde perguntas sobre **qualquer tema** com base nos documentos que o usuário envia (PDF, TXT ou MD), **sempre citando o documento e a página** de onde tirou cada informação. Se a resposta não estiver nos documentos, ele diz que não encontrou — em vez de inventar. Implementa um pipeline RAG (ChromaDB) consumido por um agente autônomo ReAct (LangChain v1 / LangGraph) com memória de sessão, tool calling, saída estruturada validada e regras de blindagem contra alucinação e prompt injection.
+Agente de IA que responde perguntas sobre **qualquer tema** com base nos documentos que o usuário envia (PDF, Word, PowerPoint, TXT ou MD), **sempre citando o documento e a página** de onde tirou cada informação. Se a resposta não estiver nos documentos, ele diz que não encontrou — em vez de inventar. Implementa um pipeline RAG (ChromaDB) consumido por um agente autônomo ReAct (LangChain v1 / LangGraph) com memória de sessão, tool calling, saída estruturada validada e regras de blindagem contra alucinação e prompt injection.
 
 Para quem ainda não tem um arquivo à mão, a aplicação já vem com documentos de exemplo (normas e guias do IFPA).
 
@@ -29,6 +29,9 @@ Para quem ainda não tem um arquivo à mão, a aplicação já vem com documento
 |---|---|
 | Ingestão de documentos (exemplos + upload do usuário) | [`app/ingest.py`](app/ingest.py) → `ler_arquivo`, `indexar_arquivo` |
 | Upload, listagem e remoção de documentos | [`app/api.py`](app/api.py) → `/api/documentos` |
+| Escolher o documento da pergunta (filtro) | [`app/tools.py`](app/tools.py) → `busca_hibrida(..., alvo)` |
+| Resumo do documento inteiro (map-reduce) | [`app/tools.py`](app/tools.py) → `resumir_documento` |
+| Página didática "Como funciona" | [`static/como-funciona.html`](static/como-funciona.html) → `/como-funciona` |
 | `RecursiveCharacterTextSplitter` com chunk_size/overlap justificados | [`app/ingest.py`](app/ingest.py) → `fatiar` + seção 3 |
 | Embeddings com modelo homologado | `text-embedding-3-small` (OpenAI) |
 | ChromaDB persistido localmente | `chroma_db/` via `langchain-chroma` |
@@ -72,7 +75,7 @@ Cada trecho indexado tem o metadado `espaco`:
 
 O `espaco_id` é gerado no navegador e guardado no `localStorage`. Ele chega à ferramenta de busca pelo `config` da execução do agente (via `ToolRuntime`), e **não** como argumento que o modelo preenche — assim o modelo não consegue, nem por prompt injection, consultar os documentos de outra pessoa.
 
-Limites de upload (configuráveis por variável de ambiente): PDF, TXT ou MD; até 15 MB (`MAX_UPLOAD_MB`), 200 páginas (`MAX_UPLOAD_PAGINAS`) e 5 documentos por usuário (`MAX_DOCUMENTOS_POR_ESPACO`); 6 envios por minuto por IP. PDFs escaneados (só imagem) são recusados com uma mensagem explicando que precisam de OCR.
+Limites de upload (configuráveis por variável de ambiente): PDF, DOCX, PPTX, TXT ou MD (em apresentações, cada slide conta como uma página); até 15 MB (`MAX_UPLOAD_MB`), 200 páginas (`MAX_UPLOAD_PAGINAS`) e 5 documentos por usuário (`MAX_DOCUMENTOS_POR_ESPACO`); 6 envios por minuto por IP. PDFs escaneados (só imagem) são recusados com uma mensagem explicando que precisam de OCR.
 
 Documentos de exemplo incluídos:
 
