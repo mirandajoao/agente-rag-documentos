@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from app.agent import construir_agente, perguntar, perguntar_stream
 from app.config import BASE_DIR, settings
 from app.guardrails import LimitadorDeTaxa, limitador
-from app import controle, persistencia, turma
+from app import controle, monitoramento, persistencia, turma
 from app.ingest import (
     ESPACO_EXEMPLOS,
     EXTENSOES_ACEITAS,
@@ -62,6 +62,8 @@ from app.tools import marcar_base_alterada
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s | %(message)s")
 log = logging.getLogger("api")
+
+monitoramento.iniciar()
 
 STATIC = BASE_DIR / "static"
 ESTADO = {"pronto": False, "erro": None}

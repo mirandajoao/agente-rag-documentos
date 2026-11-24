@@ -38,3 +38,6 @@ pillow>=10.0
 
 # --- Persistência opcional (DATABASE_URL, ex.: Neon) ---
 psycopg[binary]>=3.2
+
+# --- Monitoramento de erros (opcional, SENTRY_DSN) ---
+sentry-sdk>=2.20,<3
