@@ -12,15 +12,16 @@ from __future__ import annotations
 from app.config import exigir_chave_api, settings
 
 
-def criar_chat(temperatura: float | None = None, max_tokens: int | None = None):
+def criar_chat(temperatura: float | None = None, max_tokens: int | None = None, modelo: str | None = None):
     exigir_chave_api()
+    modelo = modelo or settings.chat_model
     temperatura = settings.temperature if temperatura is None else temperatura
     max_tokens = max_tokens or settings.max_output_tokens
     if settings.provedor == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
 
         return ChatGoogleGenerativeAI(
-            model=settings.chat_model,
+            model=modelo,
             google_api_key=settings.google_api_key,
             temperature=temperatura,
             max_output_tokens=max_tokens,
@@ -30,7 +31,7 @@ def criar_chat(temperatura: float | None = None, max_tokens: int | None = None):
     from langchain_openai import ChatOpenAI
 
     return ChatOpenAI(
-        model=settings.chat_model,
+        model=modelo,
         api_key=settings.openai_api_key,
         temperature=temperatura,
         max_tokens=max_tokens,
