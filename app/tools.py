@@ -82,36 +82,36 @@ def _busca_vetorial(consulta: str, filtro: dict, k: int) -> list[tuple[Document,
 def busca_hibrida(consulta: str, espaco: str) -> list[tuple[Document, str]]:
     """Busca vetorial (semântica) + BM25 (lexical), sem duplicatas.
 
-    Os documentos ENVIADOS PELO USUÁRIO têm prioridade: são buscados primeiro,
-    com top_k completo, e os de exemplo só completam com poucos trechos. Sem
-    isso, uma base de exemplo grande (ex.: um PPC de 100 páginas) "abafa" um
-    documento pequeno enviado pelo usuário.
+    Os documentos do usuário e os de exemplo são buscados SEPARADAMENTE, cada
+    um com top_k completo, e os do usuário vêm primeiro no resultado. Numa
+    busca única, uma base de exemplo grande (ex.: um PPC de 100 páginas)
+    "abafaria" um documento pequeno enviado pelo usuário; e reduzir o top_k
+    dos exemplos faria perder trechos certos quando a pergunta é sobre eles.
 
     A busca vetorial decide SE há evidência (limiar de distância); a lexical só
     complementa com trechos que contêm os termos exatos (nomes, siglas, números),
     que embeddings às vezes deixam escapar.
     """
     proprios = _busca_vetorial(consulta, {"espaco": espaco}, settings.top_k) if espaco else []
-    k_exemplos = 0
-    if settings.incluir_exemplos or not espaco:
-        k_exemplos = settings.top_k if not proprios else max(1, settings.top_k // 2)
+    k_exemplos = settings.top_k if (settings.incluir_exemplos or not espaco) else 0
     exemplos = _busca_vetorial(consulta, {"espaco": ESPACO_EXEMPLOS}, k_exemplos)
     relevantes = proprios + exemplos
     if not relevantes:
         return []
 
-    # BM25 no mesmo lugar onde a evidência principal foi encontrada.
-    espaco_lexical = espaco if proprios else ESPACO_EXEMPLOS
+    # BM25 em cada espaço onde houve evidência semântica.
+    espacos_lexicais = ([espaco] if proprios else []) + ([ESPACO_EXEMPLOS] if exemplos else [])
     vistos = {(d.metadata.get("espaco"), d.metadata.get("arquivo"), d.metadata.get("start_index")) for d, _ in relevantes}
-    try:
-        lexical = _bm25(espaco_lexical, _versao["n"])
-        for d in lexical.invoke(consulta) if lexical else []:
-            chave = (d.metadata.get("espaco"), d.metadata.get("arquivo"), d.metadata.get("start_index"))
-            if chave not in vistos:
-                vistos.add(chave)
-                relevantes.append((d, "lexical"))
-    except Exception:  # a busca lexical é complementar: falha nela não derruba a resposta
-        log.exception("Falha na busca BM25")
+    for espaco_lexical in espacos_lexicais:
+        try:
+            lexical = _bm25(espaco_lexical, _versao["n"])
+            for d in lexical.invoke(consulta) if lexical else []:
+                chave = (d.metadata.get("espaco"), d.metadata.get("arquivo"), d.metadata.get("start_index"))
+                if chave not in vistos:
+                    vistos.add(chave)
+                    relevantes.append((d, "lexical"))
+        except Exception:  # a busca lexical é complementar: falha nela não derruba a resposta
+            log.exception("Falha na busca BM25")
     return relevantes
 
 
@@ -141,7 +141,7 @@ def buscar_documentos(consulta: str, pensamento: str, runtime: ToolRuntime) -> s
             "Thought" no log de raciocínio ReAct).
 
     Returns:
-        Até 7 trechos numerados no formato
+        Até 14 trechos numerados (primeiro os dos documentos enviados pelo usuário) no formato
         "[n] <documento> | página <p> | relevância <r>" seguido do texto (em
         normas jurídicas pode vir também "| Art. <a>"). Cite exatamente o
         documento e a página informados. Se o retorno começar com
