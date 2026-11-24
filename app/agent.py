@@ -12,7 +12,7 @@ import json
 import logging
 import re
 from functools import lru_cache
-from typing import Callable
+from typing import Callable, Iterator
 
 import openai
 from json_repair import repair_json
@@ -229,14 +229,15 @@ def _erro(sessao_id: str, mensagem: str, status: str = "erro") -> RespostaOut:
     return RespostaOut(sessao_id=sessao_id, resposta=mensagem, status=status, confianca="baixa", custo=custo)
 
 
-def perguntar(pergunta: str, sessao_id: str, espaco_id: str | None = None, documento: dict | None = None) -> RespostaOut:
+def _preparar(pergunta: str, sessao_id: str, espaco_id: str | None, documento: dict | None):
+    """Valida a pergunta e monta a entrada e o config do agente. Devolve (entrada, config, erro)."""
     validacao = validar_pergunta(pergunta)
     if not validacao.ok:
         log.info("[%s] entrada bloqueada: %s", sessao_id, validacao.motivo)
-        return _erro(sessao_id, validacao.motivo, status="bloqueada")
+        return None, None, _erro(sessao_id, validacao.motivo, status="bloqueada")
 
     # thread_id = memória da conversa; espaco_id = quais documentos enviados esta pessoa pode consultar.
-    # O espaço vai pelo config (e não pela pergunta), então o modelo não consegue trocá-lo.
+    # O espaço e o documento escolhido vão pelo config (e não pela pergunta), então o modelo não consegue trocá-los.
     config = {
         "configurable": {"thread_id": sessao_id, "espaco_id": espaco_id or "", "documento": documento or None},
         "recursion_limit": settings.recursion_limit,
@@ -246,35 +247,47 @@ def perguntar(pergunta: str, sessao_id: str, espaco_id: str | None = None, docum
         # Contexto visível ao modelo; a restrição de fato é aplicada pelas ferramentas.
         nome = documento.get("documento") or documento["arquivo"]
         texto = f"[O usuário escolheu na interface o documento «{nome}» para esta pergunta.]\n{texto}"
+    return {"messages": [HumanMessage(texto)]}, config, None
 
-    try:
-        agente = construir_agente()
-        estado = agente.invoke({"messages": [HumanMessage(texto)]}, config=config)
-    except RuntimeError as exc:  # chave ausente
+
+def _resposta_de_erro(exc: Exception, sessao_id: str) -> RespostaOut:
+    if isinstance(exc, RuntimeError):  # chave ausente
         log.error("Configuração inválida: %s", exc)
         return _erro(sessao_id, "O assistente não está configurado (chave de API ausente).")
-    except openai.AuthenticationError:
+    if isinstance(exc, openai.AuthenticationError):
         log.error("Chave da OpenAI inválida ou revogada")
         return _erro(sessao_id, "Falha de autenticação com o provedor de IA. Avise os administradores.")
-    except openai.RateLimitError:
+    if isinstance(exc, openai.RateLimitError):
         log.warning("Cota/limite da OpenAI atingido")
         return _erro(sessao_id, "O limite de uso da API foi atingido. Tente novamente em alguns instantes.")
-    except (openai.APITimeoutError, openai.APIConnectionError):
+    if isinstance(exc, (openai.APITimeoutError, openai.APIConnectionError)):
         log.warning("Timeout/conexão com a OpenAI")
         return _erro(sessao_id, "O provedor de IA não respondeu a tempo. Tente novamente.")
-    except GraphRecursionError:
+    if isinstance(exc, GraphRecursionError):
         log.warning("Limite de passos ReAct atingido")
         return _erro(
             sessao_id,
             "Não consegui chegar a uma resposta segura dentro do limite de passos. Reformule a pergunta de forma mais específica.",
         )
-    except Exception:
-        log.exception("Erro inesperado no agente")
-        return _erro(sessao_id, "Ocorreu um erro interno ao processar sua pergunta.")
+    log.exception("Erro inesperado no agente", exc_info=exc)
+    return _erro(sessao_id, "Ocorreu um erro interno ao processar sua pergunta.")
 
-    turno = _mensagens_do_turno(estado["messages"])
+
+def _mapa_arquivos(espaco_id: str | None) -> dict[str, tuple[str, bool]]:
+    """Nome do documento -> (arquivo, é exemplo), para os links "abrir na página"."""
+    from app.ingest import ESPACO_EXEMPLOS, documentos_do_espaco
+
+    try:
+        docs = documentos_do_espaco(espaco_id or ESPACO_EXEMPLOS, incluir_exemplos=bool(espaco_id))
+    except Exception:
+        return {}
+    return {d["documento"]: (d["arquivo"], d["exemplo"]) for d in docs}
+
+
+def _finalizar(mensagens: list[BaseMessage], sessao_id: str, espaco_id: str | None) -> RespostaOut:
+    turno = _mensagens_do_turno(mensagens)
     passos, _ = extrair_passos(turno)
-    observacoes_sessao = [_texto(m) for m in estado["messages"] if isinstance(m, ToolMessage)]
+    observacoes_sessao = [_texto(m) for m in mensagens if isinstance(m, ToolMessage)]
     final = next((m for m in reversed(turno) if isinstance(m, AIMessage) and not m.tool_calls), None)
 
     resp, avisos = interpretar_resposta_final(_texto(final) if final else "")
@@ -290,4 +303,47 @@ def perguntar(pergunta: str, sessao_id: str, espaco_id: str | None = None, docum
         log.info("[%s] %-11s %s", sessao_id, p.tipo.upper(), p.conteudo.replace("\n", " ")[:200])
 
     trechos = extrair_trechos(turno, resp)
+    arquivos = _mapa_arquivos(espaco_id) if trechos else {}
+    for t in trechos:
+        t.arquivo = arquivos.get(t.documento, ("", False))[0]
     return RespostaOut(sessao_id=sessao_id, trechos=trechos, passos=passos, avisos=avisos, custo=custo, **resp.model_dump())
+
+
+def perguntar(pergunta: str, sessao_id: str, espaco_id: str | None = None, documento: dict | None = None) -> RespostaOut:
+    entrada, config, erro = _preparar(pergunta, sessao_id, espaco_id, documento)
+    if erro:
+        return erro
+    try:
+        estado = construir_agente().invoke(entrada, config=config)
+    except Exception as exc:
+        return _resposta_de_erro(exc, sessao_id)
+    return _finalizar(estado["messages"], sessao_id, espaco_id)
+
+
+def perguntar_stream(
+    pergunta: str, sessao_id: str, espaco_id: str | None = None, documento: dict | None = None
+) -> Iterator[dict]:
+    """Mesma lógica de `perguntar`, mas emitindo cada passo ReAct assim que ele acontece.
+
+    Eventos: {"tipo": "passo", "passo": {...}} durante o raciocínio e, no fim,
+    {"tipo": "final", "resposta": {...RespostaOut...}}.
+    """
+    entrada, config, erro = _preparar(pergunta, sessao_id, espaco_id, documento)
+    if erro:
+        yield {"tipo": "final", "resposta": erro.model_dump()}
+        return
+    try:
+        agente = construir_agente()
+        for atualizacao in agente.stream(entrada, config=config, stream_mode="updates"):
+            for parcial in (atualizacao or {}).values():
+                mensagens = (parcial or {}).get("messages") if isinstance(parcial, dict) else None
+                if not mensagens:
+                    continue
+                passos, _ = extrair_passos(mensagens)
+                for passo in passos:
+                    yield {"tipo": "passo", "passo": passo.model_dump()}
+        estado = agente.get_state(config).values
+    except Exception as exc:
+        yield {"tipo": "final", "resposta": _resposta_de_erro(exc, sessao_id).model_dump()}
+        return
+    yield {"tipo": "final", "resposta": _finalizar(estado["messages"], sessao_id, espaco_id).model_dump()}

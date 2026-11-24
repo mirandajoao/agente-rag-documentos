@@ -226,6 +226,19 @@ Documentos do usuário:
 | `GET` | `/api/documentos?espaco_id=...` | Lista os documentos do usuário e os de exemplo |
 | `DELETE` | `/api/documentos?espaco_id=...&arquivo=...` | Remove um documento (sem `arquivo`, remove todos do usuário) |
 
+Recursos didáticos e de operação:
+
+| Método | Rota | O que faz |
+|---|---|---|
+| `POST` | `/api/chat/stream` | Igual a `/api/chat`, em Server-Sent Events: eventos `passo` (Thought/Action/Observation ao vivo) e `final` (a resposta completa) |
+| `POST` | `/api/comparar` | A mesma pergunta respondida **sem RAG** (só o modelo), para a demonstração lado a lado |
+| `POST` | `/api/documentos/sugestoes` | 3 perguntas de exemplo sobre um documento recém-enviado |
+| `GET` | `/api/documentos/arquivo?arquivo=...&espaco_id=...` | Abre o arquivo original; nas citações de PDF o link já vem com `#page=N` |
+
+**Limite diário de gasto:** `ORCAMENTO_DIARIO_USD` (padrão US$ 1,00; `0` desliga) bloqueia perguntas, comparações, sugestões e uploads quando o gasto do dia passa do teto. O controle fica em memória e zera se o servidor reiniciar, então configure também o limite de gasto no painel da OpenAI. O uso do dia aparece na lateral da interface e em `/api/info`.
+
+**Modo apresentação:** o botão no topo aumenta tudo em 30% para o projetor (a escolha fica salva no navegador).
+
 `GET /health` → `200 {"status":"ok"}` quando o agente está pronto. · `GET /qr.svg` → QR code da aplicação. · `GET /api/info` → URL pública e modelo.
 
 ## 8. Roteiro sugerido para a demonstração

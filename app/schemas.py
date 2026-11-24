@@ -69,6 +69,27 @@ class PerguntaIn(BaseModel):
     documento: DocumentoAlvo | None = None
 
 
+class ComparacaoIn(BaseModel):
+    pergunta: str = Field(..., min_length=1)
+    sessao_id: str = Field(..., min_length=8, max_length=64, pattern=ID_PATTERN)
+
+
+class ComparacaoOut(BaseModel):
+    resposta: str
+    custo: Custo
+
+
+class SugestoesIn(BaseModel):
+    espaco_id: str = Field(..., min_length=8, max_length=64, pattern=ID_PATTERN)
+    arquivo: str = Field(..., min_length=1, max_length=120, pattern=r"^[A-Za-z0-9_.-]+$")
+
+
+class SugestoesOut(BaseModel):
+    documento: str
+    perguntas: list[str] = Field(default_factory=list)
+    custo: Custo
+
+
 class DocumentoOut(BaseModel):
     documento: str
     arquivo: str
@@ -93,6 +114,7 @@ class TrechoLido(BaseModel):
     origem: Literal["usuario", "exemplo"] = "usuario"
     texto: str = ""
     citado: bool = False
+    arquivo: str = Field("", description="Nome do arquivo no servidor, para abrir na página citada")
 
 
 class RespostaOut(RespostaAgente):
