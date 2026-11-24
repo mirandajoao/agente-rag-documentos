@@ -13,7 +13,7 @@ import logging
 from json_repair import repair_json
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.config import exigir_chave_api, settings
+from app.config import settings
 from app.custos import calcular_custo
 from app.guardrails import validar_pergunta
 from app.ingest import ESPACO_EXEMPLOS, documentos_do_espaco, trechos_do_documento
@@ -36,17 +36,9 @@ PROMPT_SUGESTOES = (
 
 
 def _llm(max_tokens: int):
-    from langchain_openai import ChatOpenAI
+    from app.provedor import criar_chat
 
-    exigir_chave_api()
-    return ChatOpenAI(
-        model=settings.chat_model,
-        api_key=settings.openai_api_key,
-        temperature=0.3,
-        max_tokens=max_tokens,
-        timeout=settings.request_timeout,
-        max_retries=settings.max_retries,
-    )
+    return criar_chat(temperatura=0.3, max_tokens=max_tokens)
 
 
 def _sem_custo() -> Custo:

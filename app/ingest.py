@@ -3,7 +3,7 @@
 Etapas:
 1. Ingestão documental  -> PDF (PyPDFLoader), Word (.docx), PowerPoint (.pptx) e texto (.txt/.md)
 2. Fatiamento           -> RecursiveCharacterTextSplitter com separadores estruturais
-3. Vetorização          -> OpenAI text-embedding-3-small
+3. Vetorização          -> OpenAI text-embedding-3-small (ou Gemini, ver app/provedor.py)
 4. Armazenamento        -> ChromaDB persistido localmente em chroma_db/
 
 Os documentos vêm de duas origens, separadas pelo metadado "espaco":
@@ -30,7 +30,6 @@ from pathlib import Path
 from langchain_chroma import Chroma
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.config import exigir_chave_api, settings
@@ -66,6 +65,7 @@ SEPARADORES = [
 
 # Nome amigável dos documentos de exemplo, inferido pelo nome do arquivo.
 TITULOS_EXEMPLOS = {
+    "apostila_ia": "Apostila – Introdução à Inteligência Artificial e RAG",
     "944": "Resolução CONSUP nº 944/2023 – Regulamento Didático-Pedagógico da Graduação",
     "945": "Resolução CONSUP nº 945/2023 – RDP do Ensino da Educação Básica",
     "ppc": "PPC – Bacharelado em Ciência da Computação (IFPA Ananindeua)",
@@ -269,13 +269,10 @@ def fatiar(documentos: list[Document]) -> list[Document]:
     return chunks
 
 
-def obter_embeddings() -> OpenAIEmbeddings:
-    return OpenAIEmbeddings(
-        model=settings.embedding_model,
-        api_key=settings.openai_api_key,
-        max_retries=settings.max_retries,
-        request_timeout=settings.request_timeout,
-    )
+def obter_embeddings():
+    from app.provedor import criar_embeddings
+
+    return criar_embeddings()
 
 
 def abrir_vectorstore() -> Chroma:

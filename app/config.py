@@ -30,16 +30,31 @@ def _float(nome: str, padrao: float) -> float:
         return padrao
 
 
+# Provedor de IA: "openai" (padrão, pago e estável) ou "gemini" (Google, com plano gratuito).
+PROVEDOR = os.getenv("PROVEDOR_IA", "openai").strip().lower()
+GEMINI = PROVEDOR == "gemini"
+
+
 @dataclass(frozen=True)
 class Settings:
     # --- Credenciais (somente via ambiente) ---
+    provedor: str = PROVEDOR
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
+    google_api_key: str = os.getenv("GOOGLE_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")
 
-    # --- Modelos (FinOps: os mais econômicos da OpenAI com bom tool calling) ---
-    # gpt-4o-mini: US$ 0,15 / 1M tokens de entrada e US$ 0,60 / 1M de saída.
-    chat_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    # text-embedding-3-small: US$ 0,02 / 1M tokens, 1536 dimensões.
-    embedding_model: str = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+    # --- Modelos ---
+    # OpenAI (FinOps: os mais econômicos com bom tool calling):
+    #   gpt-4o-mini: US$ 0,15 / 1M tokens de entrada e US$ 0,60 / 1M de saída.
+    #   text-embedding-3-small: US$ 0,02 / 1M tokens, 1536 dimensões.
+    # Gemini: os nomes mudam com frequência; confira o ID exato no Google AI Studio.
+    chat_model: str = (
+        os.getenv("GEMINI_MODEL", "gemini-flash-latest") if GEMINI else os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    )
+    embedding_model: str = (
+        os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
+        if GEMINI
+        else os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+    )
     temperature: float = _float("LLM_TEMPERATURE", 0.0)
     max_output_tokens: int = _int("LLM_MAX_TOKENS", 900)
     request_timeout: int = _int("LLM_TIMEOUT", 45)
@@ -84,7 +99,8 @@ class Settings:
     pdf_dir: Path = Path(os.getenv("PDF_DIR", BASE_DIR / "data" / "pdfs"))
     upload_dir: Path = Path(os.getenv("UPLOAD_DIR", BASE_DIR / "data" / "uploads"))
     chroma_dir: Path = Path(os.getenv("CHROMA_DIR", BASE_DIR / "chroma_db"))
-    collection_name: str = os.getenv("CHROMA_COLLECTION", "documentos")
+    # Cada provedor gera embeddings de tamanhos diferentes, então cada um usa sua coleção.
+    collection_name: str = os.getenv("CHROMA_COLLECTION", "documentos_gemini" if GEMINI else "documentos")
 
 
 settings = Settings()
@@ -92,6 +108,15 @@ settings = Settings()
 
 def exigir_chave_api() -> None:
     """Falha cedo, com mensagem clara, se a chave não estiver configurada."""
+    if settings.provedor == "gemini":
+        if not settings.google_api_key:
+            raise RuntimeError(
+                "GOOGLE_API_KEY não configurada. Gere uma chave gratuita no Google AI Studio "
+                "(aistudio.google.com) e cadastre-a no .env ou em Variables no Railway."
+            )
+        return
+    if settings.provedor != "openai":
+        raise RuntimeError(f"PROVEDOR_IA inválido: {settings.provedor!r}. Use 'openai' ou 'gemini'.")
     if not settings.openai_api_key or not settings.openai_api_key.startswith("sk-"):
         raise RuntimeError(
             "OPENAI_API_KEY não configurada. Localmente, copie .env.example para .env "

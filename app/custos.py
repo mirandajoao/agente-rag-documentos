@@ -28,10 +28,15 @@ PRECOS_LLM = {
     "gpt-4o": (2.50, 1.25, 10.00),
     "gpt-5-nano": (0.05, 0.005, 0.40),
     "gpt-5-mini": (0.25, 0.025, 2.00),
+    # Gemini no plano gratuito do Google AI Studio: sem cobrança (com limites de uso).
+    # No plano pago, informe os preços com PRICE_INPUT_PER_1M / PRICE_OUTPUT_PER_1M.
+    "gemini": (0.0, 0.0, 0.0),
 }
 PRECOS_EMBEDDING = {
     "text-embedding-3-small": 0.02,
     "text-embedding-3-large": 0.13,
+    "gemini-embedding-001": 0.0,
+    "gemini-embedding-2": 0.0,
 }
 
 
@@ -87,7 +92,7 @@ def calcular_custo(mensagens_do_turno: list[BaseMessage], uso_extra: list[dict] 
         cache += (uso.get("input_token_details") or {}).get("cache_read", 0) or 0
 
     p_in, p_cache, p_out = _preco_llm(settings.chat_model)
-    p_emb = PRECOS_EMBEDDING.get(settings.embedding_model, 0.02)
+    p_emb = PRECOS_EMBEDDING.get(settings.embedding_model, 0.0 if settings.provedor == "gemini" else 0.02)
     usd = ((entrada - cache) * p_in + cache * p_cache + saida * p_out + tokens_embedding * p_emb) / 1_000_000
 
     return Custo(

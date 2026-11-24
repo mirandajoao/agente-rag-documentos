@@ -24,5 +24,6 @@ uvicorn[standard]>=0.30
 python-multipart>=0.0.9  # upload de arquivos (multipart/form-data)
 python-docx>=1.1        # leitura de documentos Word (.docx)
 python-pptx>=1.0        # leitura de apresentações PowerPoint (.pptx)
+langchain-google-genai>=4.0  # opcional: PROVEDOR_IA=gemini (plano gratuito do Google)
 python-dotenv>=1.0
 segno>=1.6         # QR code da página

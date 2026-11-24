@@ -1,6 +1,6 @@
 """Agente autônomo ReAct (Thought -> Action -> Observation) com LangChain/LangGraph.
 
-- Modelo: ChatOpenAI (gpt-4o-mini por padrão, configurável)
+- Modelo: OpenAI (gpt-4o-mini, padrão) ou Gemini, via app/provedor.py
 - Ferramentas: buscar_documentos, listar_documentos (filtradas pelo espaço do usuário)
 - Memória de sessão: InMemorySaver (checkpointer do LangGraph), uma thread por sessao_id
 - Saída: JSON reparado com json-repair e validado com Pydantic
@@ -20,15 +20,15 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRequest, ModelResponse, wrap_model_call
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately, trim_messages
-from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.errors import GraphRecursionError
 from pydantic import ValidationError
 
-from app.config import exigir_chave_api, settings
+from app.config import settings
 from app.custos import calcular_custo
 from app.guardrails import citacao_foi_recuperada, validar_pergunta
 from app.prompts import SYSTEM_PROMPT
+from app.provedor import criar_chat
 from app.schemas import Custo, PassoReAct, RespostaAgente, RespostaOut, TrechoLido
 from app.tools import FERRAMENTAS, consumir_uso_extra
 
@@ -59,15 +59,7 @@ def aparar_historico(request: ModelRequest, handler: Callable[[ModelRequest], Mo
 
 @lru_cache(maxsize=1)
 def construir_agente():
-    exigir_chave_api()
-    modelo = ChatOpenAI(
-        model=settings.chat_model,
-        api_key=settings.openai_api_key,
-        temperature=settings.temperature,
-        max_tokens=settings.max_output_tokens,
-        timeout=settings.request_timeout,
-        max_retries=settings.max_retries,
-    )
+    modelo = criar_chat()
     return create_agent(
         model=modelo,
         tools=FERRAMENTAS,
@@ -257,7 +249,7 @@ def _resposta_de_erro(exc: Exception, sessao_id: str) -> RespostaOut:
     if isinstance(exc, openai.AuthenticationError):
         log.error("Chave da OpenAI inválida ou revogada")
         return _erro(sessao_id, "Falha de autenticação com o provedor de IA. Avise os administradores.")
-    if isinstance(exc, openai.RateLimitError):
+    if isinstance(exc, openai.RateLimitError) or "RESOURCE_EXHAUSTED" in str(exc) or "429" in type(exc).__name__ + str(exc)[:40]:
         log.warning("Cota/limite da OpenAI atingido")
         return _erro(sessao_id, "O limite de uso da API foi atingido. Tente novamente em alguns instantes.")
     if isinstance(exc, (openai.APITimeoutError, openai.APIConnectionError)):
