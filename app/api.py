@@ -26,6 +26,7 @@ from app.config import BASE_DIR, settings
 from app.guardrails import LimitadorDeTaxa, limitador
 from app import turma
 from app.ingest import (
+    ESPACO_EXEMPLOS,
     EXTENSOES_ACEITAS,
     FORMATOS_ACEITOS,
     DocumentoInvalido,
@@ -37,6 +38,7 @@ from app.ingest import (
     titulo_amigavel,
 )
 from app.extras import comparar_sem_rag, sugerir_perguntas
+from app.estudos import comparar_buscas, comparar_modelos, fatiamento
 from app.mapa import montar_mapa
 from app.web import LinkInvalido, baixar, html_para_texto
 from app.orcamento import MENSAGEM_LIMITE, orcamento
@@ -45,8 +47,10 @@ from app.schemas import (
     ComparacaoOut,
     DocumentoOut,
     DocumentosOut,
+    EstudoIn,
     LinkIn,
     MapaIn,
+    ModeracaoIn,
     PerguntaIn,
     RespostaOut,
     SugestoesIn,
@@ -382,6 +386,65 @@ async def mapa(dados: MapaIn, request: Request):
 def painel_turma():
     """Perguntas recentes da turma (sem identificar ninguém), para o projetor."""
     return turma.estado()
+
+
+limitador_moderacao = LimitadorDeTaxa(20)
+
+
+def _moderador(dados: ModeracaoIn, request: Request) -> None:
+    if not settings.painel_senha:
+        raise HTTPException(403, "A moderação está desligada: defina a variável PAINEL_SENHA no servidor.")
+    if not limitador_moderacao.permitir(_cliente(request)):
+        raise HTTPException(429, "Tentativas demais. Aguarde um minuto.")
+    if not turma.senha_ok(dados.senha):
+        raise HTTPException(401, "Senha do professor incorreta.")
+
+
+@app.post("/api/turma/ocultar")
+def ocultar_pergunta(dados: ModeracaoIn, request: Request):
+    _moderador(dados, request)
+    if not dados.id or not turma.ocultar(dados.id):
+        raise HTTPException(404, "Pergunta não encontrada (talvez já tenha saído do painel).")
+    return {"ok": True}
+
+
+@app.post("/api/turma/limpar")
+def limpar_painel(dados: ModeracaoIn, request: Request):
+    _moderador(dados, request)
+    turma.limpar()
+    return {"ok": True}
+
+
+@app.post("/api/busca/comparar")
+async def busca_comparada(dados: EstudoIn, request: Request):
+    """Modo aula: o que a busca semântica e a por palavras-chave acham, cada uma sozinha."""
+    _validar_espaco(dados.espaco_id)
+    if not ESTADO["pronto"]:
+        raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
+    _limitar(request, dados.espaco_id)
+    return await run_in_threadpool(comparar_buscas, dados.pergunta, dados.espaco_id, dados.exemplos, dados.top_k, dados.semelhanca_minima)
+
+
+@app.get("/api/documentos/fatiamento")
+async def ver_fatiamento(espaco_id: str = Query(""), arquivo: str = Query(...), exemplo: bool = Query(False)):
+    """Modo aula: como o documento foi dividido em trechos."""
+    if not exemplo:
+        _validar_espaco(espaco_id)
+    dados = await run_in_threadpool(fatiamento, ESPACO_EXEMPLOS if exemplo else espaco_id, _nome_seguro(arquivo))
+    if not dados["total"]:
+        raise HTTPException(404, "Documento não encontrado.")
+    return dados
+
+
+@app.post("/api/comparar-modelos")
+async def comparar_dois_modelos(dados: EstudoIn, request: Request):
+    """Modo aula: dois modelos respondendo à mesma pergunta com os mesmos trechos."""
+    _validar_espaco(dados.espaco_id)
+    _limitar(request, dados.espaco_id)
+    _exigir_pronto_e_orcamento()
+    resp = await run_in_threadpool(comparar_modelos, dados.pergunta, dados.espaco_id, dados.exemplos)
+    orcamento.registrar(sum(m.get("custo_usd", 0) for m in resp["modelos"]))
+    return resp
 
 
 @app.get("/turma", include_in_schema=False)

@@ -260,6 +260,11 @@ Recursos didáticos e de operação:
 - **Mapa dos embeddings** (`POST /api/mapa`): os trechos viram pontos em 2D por PCA. A pergunta aparece como estrela, e os top_k trechos mais parecidos ficam destacados com a semelhança real (cosseno).
 - **Ver o prompt:** cada resposta traz em `prompt` o que o modelo recebeu (instruções, pergunta, chamadas de ferramenta e os trechos colados).
 - **Painel da turma** (`/turma`, com `GET /api/turma`): as perguntas recentes de todos, ao vivo, para o projetor, sem identificar quem perguntou. Desliga com `PAINEL_TURMA=false`.
+- **Desafie o agente** (menu Mais): perguntas prontas para tentar enganar o agente (ignorar as regras, fato inexistente, fora dos documentos, não citar fonte). O painel da turma conta os ataques bloqueados e as vezes em que o agente não inventou.
+- **Ver o fatiamento** (menu Mais, `GET /api/documentos/fatiamento`): os trechos de um documento, com a sobreposição entre eles destacada.
+- **Semântica × palavra-chave** (em cada resposta, `POST /api/busca/comparar`): o que cada busca da busca híbrida encontrou sozinha, com a nota de cada uma (semelhança e pontuação BM25) e os trechos que aparecem nas duas.
+- **Comparar modelos** (em cada resposta, `POST /api/comparar-modelos`): os mesmos trechos respondidos por dois modelos, com tempo, tokens e custo. Padrão `gpt-4o-mini` × `gpt-4o`; muda com `MODELOS_COMPARACAO=modelo1,modelo2`.
+- **Moderação do painel:** palavrões aparecem mascarados automaticamente. Com `PAINEL_SENHA` definida, o "Modo professor" do painel permite ocultar uma pergunta e limpar o painel (`POST /api/turma/ocultar` e `/api/turma/limpar`).
 - **Resposta em streaming:** o texto aparece palavra por palavra (evento `token` no SSE). Desliga com `STREAM_TOKENS=false`.
 
 **Mais fontes:**

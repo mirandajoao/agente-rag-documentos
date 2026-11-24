@@ -103,6 +103,21 @@ class MapaIn(BaseModel):
     top_k: int | None = Field(None, ge=1, le=12)
 
 
+class ModeracaoIn(BaseModel):
+    senha: str = Field(..., min_length=1, max_length=200)
+    id: str | None = Field(None, max_length=40)
+
+
+class EstudoIn(BaseModel):
+    """Ferramentas do modo aula: comparar buscas e comparar modelos."""
+
+    espaco_id: str = Field(..., min_length=8, max_length=64, pattern=ID_PATTERN)
+    pergunta: str = Field(..., min_length=1, max_length=500)
+    exemplos: bool = True
+    top_k: int | None = Field(None, ge=1, le=12)
+    semelhanca_minima: float | None = Field(None, ge=0, le=0.95)
+
+
 class SugestoesIn(BaseModel):
     espaco_id: str = Field(..., min_length=8, max_length=64, pattern=ID_PATTERN)
     arquivo: str = Field(..., min_length=1, max_length=120, pattern=r"^[A-Za-z0-9_.-]+$")

@@ -21,7 +21,9 @@
   h1 { margin: 0 0 4px; font-size: 28px; letter-spacing: -.02em; display: flex; align-items: center; gap: 10px; }
   h1::before { content: ""; width: 14px; height: 14px; border-radius: 4px; background: var(--brand); }
   .sub { color: var(--muted); margin: 0 0 20px; }
-  .numeros { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .numeros { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+  .numero.escudo { border-color: var(--ok); }
+  .numero small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
   .numero { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
   .numero b { display: block; font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
   .numero span { color: var(--muted); font-size: 13px; }
@@ -35,12 +37,23 @@
   .dot::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
   .dot.alta::before { background: var(--ok); } .dot.media::before { background: var(--medio); } .dot.baixa::before { background: var(--warn); }
   .fonte { background: var(--soft); border-radius: 999px; padding: 2px 10px; color: var(--ink); }
+  .selo { border-radius: 999px; padding: 2px 10px; font-weight: 600; }
+  .selo.bloq { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+  .selo.recusa { background: color-mix(in srgb, var(--medio) 18%, transparent); color: var(--medio); }
+  .selo.mod { background: var(--soft); color: var(--muted); }
+  .ocultar { margin-left: auto; border: 1px solid var(--line); background: none; color: var(--muted); border-radius: 8px; padding: 2px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .ocultar:hover { color: var(--warn); border-color: var(--warn); }
+  .prof { margin-top: 24px; font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .prof button, .prof input { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 8px; padding: 5px 10px; }
+  .prof button { cursor: pointer; }
+  .prof .perigo:hover { border-color: var(--warn); color: var(--warn); }
   .vazio { color: var(--muted); text-align: center; padding: 60px 0; font-size: 18px; }
   aside { position: sticky; top: 24px; align-self: start; text-align: center; }
   aside img { width: 100%; background: #fff; border-radius: 16px; padding: 8px; }
   aside p { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
   aside b { color: var(--ink); font-size: 16px; }
   @media (max-width: 900px) { .tela { grid-template-columns: 1fr; padding: 16px; } aside { display: none; } .numeros { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 1200px) and (min-width: 901px) { .numeros { grid-template-columns: repeat(3, 1fr); } }
   @media (prefers-reduced-motion: reduce) { .item { animation: none; } }
 </style>
 </head>
@@ -54,8 +67,15 @@
       <div class="numero"><b id="n-perguntas">0</b><span>perguntas</span></div>
       <div class="numero"><b id="n-respondidas">–</b><span>respondidas com fonte</span></div>
       <div class="numero"><b id="n-custo">US$ 0,00</b><span>custo total</span></div>
+      <div class="numero escudo"><b id="n-bloqueadas">0</b><span>🛡️ ataques bloqueados</span><small id="n-recusas">0 vezes o agente não inventou</small></div>
     </div>
     <div class="lista" id="lista"><div class="vazio">Esperando a primeira pergunta... 👀</div></div>
+    <div class="prof" id="prof" hidden>
+      <button type="button" id="prof-entrar">Modo professor</button>
+      <form id="prof-form" hidden><input type="password" id="prof-senha" placeholder="Senha do professor" aria-label="Senha do professor" autocomplete="current-password"> <button type="submit">Entrar</button></form>
+      <span id="prof-ativo" hidden>Modo professor ativo · <button type="button" class="perigo" id="prof-limpar">Limpar painel</button> <button type="button" id="prof-sair">Sair</button></span>
+      <span id="prof-msg"></span>
+    </div>
   </main>
   <aside>
     <img src="/qr.svg" alt="QR code para abrir o assistente" width="240" height="240">
@@ -66,6 +86,54 @@
 const lista = document.getElementById('lista');
 const NOMES = { alta: 'confiança alta', media: 'confiança média', baixa: 'confiança baixa' };
 let ultimoTopo = null;
+let senhaProf = '';
+try { senhaProf = sessionStorage.getItem('senha_prof') || ''; } catch (_) {}
+const prof = document.getElementById('prof');
+const profMsg = document.getElementById('prof-msg');
+function pintarProf() {
+  document.getElementById('prof-entrar').hidden = !!senhaProf;
+  document.getElementById('prof-form').hidden = true;
+  document.getElementById('prof-ativo').hidden = !senhaProf;
+  document.body.classList.toggle('professor', !!senhaProf);
+  lista.querySelectorAll('.ocultar').forEach(b => { b.hidden = !senhaProf; });
+}
+async function moderar(acao, id) {
+  const r = await fetch('/api/turma/' + acao, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ senha: senhaProf, id }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    profMsg.textContent = typeof d.detail === 'string' ? d.detail : 'Erro ' + r.status;
+    if (r.status === 401) { senhaProf = ''; try { sessionStorage.removeItem('senha_prof'); } catch (_) {} pintarProf(); }
+    return false;
+  }
+  profMsg.textContent = '';
+  return true;
+}
+document.getElementById('prof-entrar').addEventListener('click', () => {
+  document.getElementById('prof-entrar').hidden = true;
+  document.getElementById('prof-form').hidden = false;
+  document.getElementById('prof-senha').focus();
+});
+document.getElementById('prof-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  senhaProf = document.getElementById('prof-senha').value;
+  document.getElementById('prof-senha').value = '';
+  // Confere a senha com uma ação inofensiva: ocultar um id que não existe (404 = senha certa).
+  const r = await fetch('/api/turma/ocultar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ senha: senhaProf, id: 'verificacao' }) });
+  if (r.status === 404) {
+    try { sessionStorage.setItem('senha_prof', senhaProf); } catch (_) {}
+    profMsg.textContent = '';
+  } else {
+    const d = await r.json().catch(() => ({}));
+    profMsg.textContent = typeof d.detail === 'string' ? d.detail : 'Erro ' + r.status;
+    senhaProf = '';
+  }
+  pintarProf();
+});
+document.getElementById('prof-sair').addEventListener('click', () => { senhaProf = ''; try { sessionStorage.removeItem('senha_prof'); } catch (_) {} pintarProf(); });
+document.getElementById('prof-limpar').addEventListener('click', async () => {
+  if (!confirm('Limpar todas as perguntas e zerar os números do painel?')) return;
+  if (await moderar('limpar')) { ultimoTopo = null; lista.replaceChildren(el('div', 'vazio', 'Esperando a primeira pergunta... 👀')); atualizar(); }
+});
 function el(tag, cls, texto) { const e = document.createElement(tag); if (cls) e.className = cls; if (texto !== undefined) e.textContent = texto; return e; }
 function haQuanto(seg) {
   if (seg < 60) return 'agora';
@@ -76,9 +144,19 @@ function pintar(d) {
   document.getElementById('n-ativos').textContent = d.navegadores_ativos;
   document.getElementById('n-perguntas').textContent = d.perguntas;
   document.getElementById('n-respondidas').textContent = d.perguntas ? Math.round(d.respondidas / d.perguntas * 100) + '%' : '–';
+  document.getElementById('n-bloqueadas').textContent = d.bloqueadas;
+  document.getElementById('n-recusas').textContent = d.recusadas + ' vez' + (d.recusadas === 1 ? '' : 'es') + ' o agente não inventou';
+  prof.hidden = !d.moderacao;
+  // Some do painel o que o professor ocultou (ou o que saiu da lista).
+  const ids = new Set(d.recentes.map(r => r.id));
+  lista.querySelectorAll('[data-id]').forEach(e => { if (!ids.has(e.dataset.id)) e.remove(); });
   document.getElementById('n-custo').textContent = 'US$ ' + d.custo_usd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
   if (!d.ativo) { lista.replaceChildren(el('div', 'vazio', 'O painel da turma está desligado neste servidor (PAINEL_TURMA=false).')); return; }
-  if (!d.recentes.length) return;
+  if (!d.recentes.length) {
+    if (!lista.querySelector('.vazio')) lista.replaceChildren(el('div', 'vazio', 'Esperando a primeira pergunta... 👀'));
+    ultimoTopo = null;
+    return;
+  }
   const topo = d.recentes[0].hora;
   // Só redesenha quando chega pergunta nova (mantém a animação só nas novas).
   if (topo === ultimoTopo) {
@@ -90,12 +168,19 @@ function pintar(d) {
   if (lista.querySelector('.vazio')) lista.replaceChildren();
   for (const r of novas.slice().reverse()) {
     const item = el('article', 'item');
+    item.dataset.id = r.id;
     item.append(el('div', 'p', r.pergunta));
     if (r.resposta) item.append(el('div', 'r', r.resposta));
     const meta = el('div', 'meta');
     const hora = el('span', '', haQuanto(d.agora - r.hora)); hora.dataset.hora = r.hora;
     meta.append(el('span', 'dot ' + (r.confianca || ''), NOMES[r.confianca] || r.status), hora);
+    if (r.status === 'bloqueada') meta.append(el('span', 'selo bloq', '🛡️ bloqueado pelas proteções'));
+    if (r.status === 'sem_evidencia' || r.status === 'fora_do_escopo') meta.append(el('span', 'selo recusa', 'não inventou'));
+    if (r.moderada) meta.append(el('span', 'selo mod', 'conteúdo moderado'));
     for (const f of r.fontes || []) meta.append(el('span', 'fonte', f));
+    const oc = el('button', 'ocultar', 'Ocultar'); oc.type = 'button'; oc.hidden = !senhaProf;
+    oc.addEventListener('click', async () => { if (await moderar('ocultar', r.id)) item.remove(); });
+    meta.append(oc);
     item.append(meta);
     lista.prepend(item);
   }
@@ -105,6 +190,7 @@ async function atualizar() {
   try { pintar(await (await fetch('/api/turma')).json()); } catch (_) {}
 }
 fetch('/api/info').then(r => r.json()).then(i => { document.getElementById('url').textContent = i.url.replace(/^https?:\/\//, ''); }).catch(() => {});
+pintarProf();
 atualizar();
 setInterval(atualizar, 3000);
 </script>
