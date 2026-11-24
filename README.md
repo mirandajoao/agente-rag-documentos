@@ -259,12 +259,12 @@ Recursos didáticos e de operação:
 - **Laboratório de parâmetros:** controles para top_k, semelhança mínima e tamanho do trecho, que mudam a busca na hora (`parametros` em `/api/chat`; `tamanho_trecho` no upload e no link). Fora do modo aula, vale o padrão do servidor.
 - **Mapa dos embeddings** (`POST /api/mapa`): os trechos viram pontos em 2D por PCA. A pergunta aparece como estrela, e os top_k trechos mais parecidos ficam destacados com a semelhança real (cosseno).
 - **Ver o prompt:** cada resposta traz em `prompt` o que o modelo recebeu (instruções, pergunta, chamadas de ferramenta e os trechos colados).
-- **Painel da turma** (`/turma`, com `GET /api/turma`): as perguntas recentes de todos, ao vivo, para o projetor, sem identificar quem perguntou. Abre pelo Modo ministrante (não fica no menu dos alunos). Desliga com `PAINEL_TURMA=false`.
+- **Painel da turma** (`/turma`, com `GET /api/turma`): as perguntas recentes de todos, ao vivo, para o projetor, sem identificar quem perguntou. Abre pelo Painel do Administrador (não fica no menu dos alunos). Desliga com `PAINEL_TURMA=false`.
 - **Desafie o agente** (menu Mais): perguntas prontas para tentar enganar o agente (ignorar as regras, fato inexistente, fora dos documentos, não citar fonte). O painel da turma conta os ataques bloqueados e as vezes em que o agente não inventou.
 - **Ver o fatiamento** (menu Mais, `GET /api/documentos/fatiamento`): os trechos de um documento, com a sobreposição entre eles destacada.
 - **Semântica × palavra-chave** (em cada resposta, `POST /api/busca/comparar`): o que cada busca da busca híbrida encontrou sozinha, com a nota de cada uma (semelhança e pontuação BM25) e os trechos que aparecem nas duas.
 - **Comparar modelos** (em cada resposta, `POST /api/comparar-modelos`): os mesmos trechos respondidos por dois modelos, com tempo, tokens e custo. Padrão `gpt-4o-mini` × `gpt-4o`; muda com `MODELOS_COMPARACAO=modelo1,modelo2`.
-- **Modo ministrante** (menu Mais, senha em `MINISTRANTE_SENHA` ou `PAINEL_SENHA`): a senha vai no cabeçalho `X-Ministrante` e é conferida no servidor, com tentativas erradas limitadas por IP. Libera:
+- **Painel do Administrador** (menu Mais; internamente "ministrante"; senha em `MINISTRANTE_SENHA` ou `PAINEL_SENHA`): a senha vai no cabeçalho `X-Ministrante` e é conferida no servidor, com tentativas erradas limitadas por IP. Libera:
   - **Comparar modelos**, que só ministrantes podem usar porque o modelo maior custa caro.
   - **Controles de emergência:** pausar novas perguntas e/ou envios. Os alunos veem um aviso e os ministrantes continuam liberados.
   - **Ajuste do limite de gasto do dia** sem reiniciar.
@@ -272,7 +272,7 @@ Recursos didáticos e de operação:
   - **Moderação do painel**, com a mesma senha.
 
   Rotas: `POST /api/ministrante/entrar`, `GET /api/ministrante/estado` e `POST /api/ministrante/controles`.
-- **Moderação do painel:** palavrões aparecem mascarados automaticamente. Aberto pelo Modo ministrante, o painel já vem com a moderação (ocultar uma pergunta e limpar o painel), sem pedir senha de novo; aberto direto, é só leitura (`POST /api/turma/ocultar` e `/api/turma/limpar`).
+- **Moderação do painel:** palavrões aparecem mascarados automaticamente. Aberto pelo Painel do Administrador, o painel já vem com a moderação (ocultar uma pergunta e limpar o painel), sem pedir senha de novo; aberto direto, é só leitura (`POST /api/turma/ocultar` e `/api/turma/limpar`).
 - **Resposta em streaming:** o texto aparece palavra por palavra (evento `token` no SSE). Desliga com `STREAM_TOKENS=false`.
 
 **Mais fontes:**
@@ -286,7 +286,7 @@ Recursos didáticos e de operação:
 - Os documentos aparecem como chips acima da caixa; os de exemplo ficam num chip só, e o × tira os exemplos da tela **e da busca** daquele navegador (`exemplos: false` em `/api/chat`, `/api/chat/stream` e `/api/documentos`). O menu **Mais** traz de volta.
 - Cada resposta mostra o texto, as fontes (chips com documento e página, que abrem o PDF na página citada) e a bolinha de confiança. Os trechos lidos ficam em "Ver os N trechos".
 - **Modo aula** (menu Mais): mostra os bastidores para a oficina, com os trechos abertos e a frase citada destacada, o custo de cada pergunta, o raciocínio ReAct ao vivo e "Comparar: e se fosse sem RAG?".
-- **Modo apresentação** (menu Mais): tudo 25% maior para o projetor. O mesmo menu tem o QR code em tela cheia, baixar a conversa (.md), imprimir/PDF, o guia rápido e o custo da sessão.
+- **Menu Mais (alunos):** modo aula, remover exemplos, baixar a conversa (.md), imprimir/PDF, guia rápido e o custo da sessão. Com o modo aula ligado, aparecem também o mapa dos embeddings, o fatiamento e o "Desafie o agente". O QR code em tela cheia e o uso de hoje (de todos) ficam no Painel do Administrador. Para ampliar no projetor, use o zoom do navegador.
 - Interruptor de tema claro/escuro no topo, estilo iPhone: o ícone vira sol ou lua conforme o tema e, sem escolha salva, segue o sistema.
 - Conversa salva no navegador (volta ao recarregar), erros com dica de solução e atalhos `/` (pergunta) e `Esc` (fecha).
 

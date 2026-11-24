@@ -141,12 +141,12 @@ def _ministrante(request: Request) -> bool:
 
 def _exigir_ministrante(request: Request) -> None:
     if not controle.disponivel():
-        raise HTTPException(403, "O Modo ministrante está desligado: defina MINISTRANTE_SENHA no servidor.")
+        raise HTTPException(403, "O Painel do Administrador está desligado: defina MINISTRANTE_SENHA no servidor.")
     if _ministrante(request):
         return
     if not limitador_senha.permitir(_cliente(request)):
         raise HTTPException(429, "Tentativas demais. Aguarde um minuto.")
-    raise HTTPException(401, "Só os ministrantes podem usar isto (senha ausente ou incorreta).")
+    raise HTTPException(401, "Só o administrador pode usar isto (senha ausente ou incorreta).")
 
 
 def _checar_pausa(request: Request, envio: bool = False) -> None:
@@ -470,7 +470,7 @@ def _estado_ministrante() -> dict:
 def ministrante_entrar(dados: MinistranteEntrarIn, request: Request):
     """Confere a senha dos ministrantes (sem guardar nada no servidor)."""
     if not controle.disponivel():
-        raise HTTPException(403, "O Modo ministrante está desligado: defina MINISTRANTE_SENHA no servidor.")
+        raise HTTPException(403, "O Painel do Administrador está desligado: defina MINISTRANTE_SENHA no servidor.")
     if not limitador_senha.permitir(_cliente(request)):
         raise HTTPException(429, "Tentativas demais. Aguarde um minuto.")
     if not controle.senha_ok(dados.senha):
