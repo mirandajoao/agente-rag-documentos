@@ -4,7 +4,11 @@ Oficina **"Converse com os seus documentos"** · VIII SIEPEX 2026 · IFPA Campus
 
 Agente de IA que responde perguntas sobre **qualquer tema** com base nos documentos que o usuário envia (PDF, Word, PowerPoint, TXT ou MD), **sempre citando o documento e a página** de onde tirou cada informação. Se a resposta não estiver nos documentos, ele diz que não encontrou — em vez de inventar. Implementa um pipeline RAG (ChromaDB) consumido por um agente autônomo ReAct (LangChain v1 / LangGraph) com memória de sessão, tool calling, saída estruturada validada e regras de blindagem contra alucinação e prompt injection.
 
-Para quem ainda não tem um arquivo à mão, a aplicação já vem com documentos de exemplo (normas e guias do IFPA).
+Para quem ainda não tem um arquivo à mão, a aplicação já vem com documentos de exemplo: uma **apostila de introdução à IA e ao RAG** (escrita para a oficina) e normas e guias do IFPA.
+
+**Pratique em casa, de graça:** o notebook [RAG passo a passo](notebooks/rag_passo_a_passo.ipynb) monta o pipeline célula por célula no Google Colab, com o Gemini (plano gratuito) ou a OpenAI.
+
+[![Abrir no Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mirandajoao/agente-rag-documentos/blob/main/notebooks/rag_passo_a_passo.ipynb)
 
 ---
 
@@ -81,6 +85,7 @@ Documentos de exemplo incluídos:
 
 | Arquivo | Documento | Páginas |
 |---|---|---|
+| `apostila_ia_oficina.pdf` | Apostila – Introdução à Inteligência Artificial e RAG (gerada por `scripts/gerar_apostila.py` a partir de `docs/apostila_ia_oficina.md`) | 7 |
 | `resolucao_945_2023_rdp.pdf` | Resolução CONSUP nº 945/2023 – RDP do Ensino da Educação Básica | 98 |
 | `ppc_ciencia_computacao_v8.pdf` | PPC – Bacharelado em Ciência da Computação (Campus Ananindeua) | 108 |
 | `guia_academico_2025.pdf` | Guia Acadêmico IFPA 2025 | 35 |
@@ -225,6 +230,19 @@ Documentos do usuário:
 | `POST` | `/api/documentos` (multipart: `espaco_id`, `arquivo`) | Envia e indexa um PDF/TXT/MD |
 | `GET` | `/api/documentos?espaco_id=...` | Lista os documentos do usuário e os de exemplo |
 | `DELETE` | `/api/documentos?espaco_id=...&arquivo=...` | Remove um documento (sem `arquivo`, remove todos do usuário) |
+
+### Provedor de IA: OpenAI ou Gemini
+
+A aplicação usa a OpenAI por padrão. Para usar o Gemini, do Google, que tem plano gratuito:
+
+```bash
+PROVEDOR_IA=gemini
+GOOGLE_API_KEY=...            # gere em https://aistudio.google.com/apikey
+GEMINI_MODEL=gemini-flash-latest       # opcional; confira o ID exato no AI Studio
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001   # opcional
+```
+
+Toda a criação de modelos passa por [`app/provedor.py`](app/provedor.py), então agente, resumo, comparação e sugestões mudam juntos. Cada provedor usa sua própria coleção no ChromaDB (os embeddings têm tamanhos diferentes). No plano gratuito do Gemini o custo exibido é zero, os limites de uso são por projeto (compartilhados por todos que usam a mesma chave) e os dados enviados podem ser usados pelo Google para melhorar os produtos, por isso a OpenAI segue como padrão na demonstração pública.
 
 Recursos didáticos e de operação:
 

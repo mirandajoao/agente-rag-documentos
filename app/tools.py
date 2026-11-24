@@ -334,16 +334,9 @@ def _agrupar_por_pagina(trechos: list[Document]) -> list[tuple[int, str]]:
 
 
 def _llm_resumo():
-    from langchain_openai import ChatOpenAI
+    from app.provedor import criar_chat
 
-    return ChatOpenAI(
-        model=settings.chat_model,
-        api_key=settings.openai_api_key,
-        temperature=0,
-        max_tokens=600,
-        timeout=settings.request_timeout,
-        max_retries=settings.max_retries,
-    )
+    return criar_chat(temperatura=0, max_tokens=600)
 
 
 @tool
