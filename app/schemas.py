@@ -61,6 +61,13 @@ class DocumentoAlvo(BaseModel):
     exemplo: bool = False
 
 
+class ParametrosBusca(BaseModel):
+    """Laboratório do modo aula: muda a busca só desta pergunta."""
+
+    top_k: int | None = Field(None, ge=1, le=12)
+    semelhanca_minima: float | None = Field(None, ge=0, le=0.95)
+
+
 class PerguntaIn(BaseModel):
     pergunta: str = Field(..., min_length=1)
     sessao_id: str = Field(..., min_length=8, max_length=64, pattern=ID_PATTERN)
@@ -69,6 +76,7 @@ class PerguntaIn(BaseModel):
     documento: DocumentoAlvo | None = None
     # False quando o usuário removeu os documentos de exemplo da tela (ficam fora da busca dele).
     exemplos: bool = True
+    parametros: ParametrosBusca | None = None
 
 
 class ComparacaoIn(BaseModel):
@@ -79,6 +87,20 @@ class ComparacaoIn(BaseModel):
 class ComparacaoOut(BaseModel):
     resposta: str
     custo: Custo
+
+
+class LinkIn(BaseModel):
+    espaco_id: str = Field(..., min_length=8, max_length=64, pattern=ID_PATTERN)
+    url: str = Field(..., min_length=8, max_length=2000)
+    exemplos: bool = True
+    tamanho_trecho: int | None = Field(None, ge=200, le=4000)
+
+
+class MapaIn(BaseModel):
+    espaco_id: str = Field(..., min_length=8, max_length=64, pattern=ID_PATTERN)
+    pergunta: str = Field("", max_length=500)
+    exemplos: bool = True
+    top_k: int | None = Field(None, ge=1, le=12)
 
 
 class SugestoesIn(BaseModel):
@@ -119,9 +141,17 @@ class TrechoLido(BaseModel):
     arquivo: str = Field("", description="Nome do arquivo no servidor, para abrir na página citada")
 
 
+class PromptParte(BaseModel):
+    """Uma parte do que foi enviado ao modelo (modo aula: "Ver o prompt")."""
+
+    papel: Literal["sistema", "historico", "usuario", "assistente", "ferramenta"]
+    conteudo: str
+
+
 class RespostaOut(RespostaAgente):
     sessao_id: str
     trechos: list[TrechoLido] = Field(default_factory=list)
     passos: list[PassoReAct] = Field(default_factory=list)
     avisos: list[str] = Field(default_factory=list)
     custo: Custo | None = None
+    prompt: list[PromptParte] = Field(default_factory=list)

@@ -18,7 +18,7 @@ import openai
 from json_repair import repair_json
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRequest, ModelResponse, wrap_model_call
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately, trim_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.errors import GraphRecursionError
@@ -29,7 +29,7 @@ from app.custos import calcular_custo
 from app.guardrails import citacao_foi_recuperada, validar_pergunta
 from app.prompts import SYSTEM_PROMPT
 from app.provedor import criar_chat
-from app.schemas import Custo, PassoReAct, RespostaAgente, RespostaOut, TrechoLido
+from app.schemas import Custo, PassoReAct, PromptParte, RespostaAgente, RespostaOut, TrechoLido
 from app.tools import FERRAMENTAS, consumir_uso_extra
 
 log = logging.getLogger("agente")
@@ -221,7 +221,9 @@ def _erro(sessao_id: str, mensagem: str, status: str = "erro") -> RespostaOut:
     return RespostaOut(sessao_id=sessao_id, resposta=mensagem, status=status, confianca="baixa", custo=custo)
 
 
-def _preparar(pergunta: str, sessao_id: str, espaco_id: str | None, documento: dict | None, exemplos: bool = True):
+def _preparar(
+    pergunta: str, sessao_id: str, espaco_id: str | None, documento: dict | None, exemplos: bool = True, parametros: dict | None = None
+):
     """Valida a pergunta e monta a entrada e o config do agente. Devolve (entrada, config, erro)."""
     validacao = validar_pergunta(pergunta)
     if not validacao.ok:
@@ -231,7 +233,7 @@ def _preparar(pergunta: str, sessao_id: str, espaco_id: str | None, documento: d
     # thread_id = memória da conversa; espaco_id = quais documentos enviados esta pessoa pode consultar.
     # O espaço e o documento escolhido vão pelo config (e não pela pergunta), então o modelo não consegue trocá-los.
     config = {
-        "configurable": {"thread_id": sessao_id, "espaco_id": espaco_id or "", "documento": documento or None, "exemplos": exemplos},
+        "configurable": {"thread_id": sessao_id, "espaco_id": espaco_id or "", "documento": documento or None, "exemplos": exemplos, "parametros": parametros or {}},
         "recursion_limit": settings.recursion_limit,
     }
     texto = validacao.texto
@@ -276,6 +278,69 @@ def _mapa_arquivos(espaco_id: str | None) -> dict[str, tuple[str, bool]]:
     return {d["documento"]: (d["arquivo"], d["exemplo"]) for d in docs}
 
 
+def montar_prompt(mensagens: list[BaseMessage]) -> list[PromptParte]:
+    """O que o modelo recebeu nesta pergunta, em ordem (modo aula: "Ver o prompt").
+
+    Instruções do sistema + a pergunta + cada chamada de ferramenta e o texto que
+    ela devolveu (os trechos) + a resposta final. É a prova de que o RAG nada mais
+    é do que colocar os trechos certos dentro do prompt.
+    """
+    i_pergunta = next((i for i in range(len(mensagens) - 1, -1, -1) if isinstance(mensagens[i], HumanMessage)), None)
+    partes = [PromptParte(papel="sistema", conteudo=SYSTEM_PROMPT)]
+    if i_pergunta is None:
+        return partes
+    if i_pergunta > 0:
+        partes.append(PromptParte(papel="historico", conteudo=f"+ {i_pergunta} mensagem(ns) das perguntas anteriores desta conversa (o histórico também vai no prompt, aparado para caber no orçamento de tokens)."))
+    partes.append(PromptParte(papel="usuario", conteudo=_texto(mensagens[i_pergunta])))
+    for m in mensagens[i_pergunta + 1 :]:
+        if isinstance(m, AIMessage) and m.tool_calls:
+            for chamada in m.tool_calls:
+                args = json.dumps(chamada.get("args") or {}, ensure_ascii=False)
+                partes.append(PromptParte(papel="assistente", conteudo=f"Chamou a ferramenta {chamada.get('name')}({args})"))
+        elif isinstance(m, ToolMessage):
+            texto = _texto(m)
+            partes.append(PromptParte(papel="ferramenta", conteudo=texto[:8000] + ("\n[...]" if len(texto) > 8000 else "")))
+        elif isinstance(m, AIMessage):
+            partes.append(PromptParte(papel="assistente", conteudo=_texto(m)))
+    return partes
+
+
+_RE_INICIO_RESPOSTA = re.compile(r'"resposta"\s*:\s*"')
+_ESCAPES = {"n": "\n", "t": "\t", "r": "", "b": "", "f": "", '"': '"', "\\": "\\", "/": "/"}
+
+
+def resposta_parcial(buffer: str) -> str | None:
+    """Extrai o valor (ainda incompleto) do campo "resposta" de um JSON chegando aos pedaços."""
+    m = _RE_INICIO_RESPOSTA.search(buffer)
+    if not m:
+        return None
+    saida: list[str] = []
+    i = m.end()
+    while i < len(buffer):
+        c = buffer[i]
+        if c == '"':
+            break
+        if c == "\\":
+            if i + 1 >= len(buffer):
+                break
+            prox = buffer[i + 1]
+            if prox == "u":
+                if i + 6 > len(buffer):
+                    break
+                try:
+                    saida.append(chr(int(buffer[i + 2 : i + 6], 16)))
+                except ValueError:
+                    pass
+                i += 6
+                continue
+            saida.append(_ESCAPES.get(prox, prox))
+            i += 2
+            continue
+        saida.append(c)
+        i += 1
+    return "".join(saida)
+
+
 def _finalizar(mensagens: list[BaseMessage], sessao_id: str, espaco_id: str | None) -> RespostaOut:
     turno = _mensagens_do_turno(mensagens)
     passos, _ = extrair_passos(turno)
@@ -298,13 +363,17 @@ def _finalizar(mensagens: list[BaseMessage], sessao_id: str, espaco_id: str | No
     arquivos = _mapa_arquivos(espaco_id) if trechos else {}
     for t in trechos:
         t.arquivo = arquivos.get(t.documento, ("", False))[0]
-    return RespostaOut(sessao_id=sessao_id, trechos=trechos, passos=passos, avisos=avisos, custo=custo, **resp.model_dump())
+    return RespostaOut(
+        sessao_id=sessao_id, trechos=trechos, passos=passos, avisos=avisos, custo=custo,
+        prompt=montar_prompt(mensagens), **resp.model_dump(),
+    )
 
 
 def perguntar(
-    pergunta: str, sessao_id: str, espaco_id: str | None = None, documento: dict | None = None, exemplos: bool = True
+    pergunta: str, sessao_id: str, espaco_id: str | None = None, documento: dict | None = None, exemplos: bool = True,
+    parametros: dict | None = None,
 ) -> RespostaOut:
-    entrada, config, erro = _preparar(pergunta, sessao_id, espaco_id, documento, exemplos)
+    entrada, config, erro = _preparar(pergunta, sessao_id, espaco_id, documento, exemplos, parametros)
     if erro:
         return erro
     try:
@@ -315,20 +384,37 @@ def perguntar(
 
 
 def perguntar_stream(
-    pergunta: str, sessao_id: str, espaco_id: str | None = None, documento: dict | None = None, exemplos: bool = True
+    pergunta: str, sessao_id: str, espaco_id: str | None = None, documento: dict | None = None, exemplos: bool = True,
+    parametros: dict | None = None,
 ) -> Iterator[dict]:
     """Mesma lógica de `perguntar`, mas emitindo cada passo ReAct assim que ele acontece.
 
     Eventos: {"tipo": "passo", "passo": {...}} durante o raciocínio e, no fim,
     {"tipo": "final", "resposta": {...RespostaOut...}}.
     """
-    entrada, config, erro = _preparar(pergunta, sessao_id, espaco_id, documento, exemplos)
+    entrada, config, erro = _preparar(pergunta, sessao_id, espaco_id, documento, exemplos, parametros)
     if erro:
         yield {"tipo": "final", "resposta": erro.model_dump()}
         return
     try:
         agente = construir_agente()
-        for atualizacao in agente.stream(entrada, config=config, stream_mode="updates"):
+        # "messages" traz os tokens do modelo assim que saem; "updates" traz cada passo ReAct completo.
+        buffer, id_atual, enviado = "", None, ""
+        modos = ["updates", "messages"] if settings.stream_tokens else ["updates"]
+        for modo, dados in agente.stream(entrada, config=config, stream_mode=modos):
+            if modo == "messages":
+                pedaco, meta = dados
+                if not isinstance(pedaco, AIMessageChunk) or (meta or {}).get("langgraph_node") != "model":
+                    continue
+                if pedaco.id != id_atual:  # nova chamada ao modelo: recomeça
+                    buffer, id_atual, enviado = "", pedaco.id, ""
+                buffer += _texto(pedaco)
+                texto = resposta_parcial(buffer)
+                if texto and len(texto) - len(enviado) >= 4:
+                    enviado = texto
+                    yield {"tipo": "token", "texto": texto}
+                continue
+            atualizacao = dados
             for parcial in (atualizacao or {}).values():
                 mensagens = (parcial or {}).get("messages") if isinstance(parcial, dict) else None
                 if not mensagens:

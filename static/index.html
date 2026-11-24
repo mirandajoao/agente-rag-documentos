@@ -173,11 +173,12 @@
   .link-btn { border: 0; background: none; color: var(--brand); font-size: inherit; cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
   .progresso { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
   .progresso progress { width: 100%; height: 6px; accent-color: var(--brand); }
-  .composer { display: grid; grid-template-columns: auto minmax(0, auto) 1fr auto; grid-template-areas: "q q q q" "anexo alvo . enviar"; align-items: center; gap: 6px 6px;
+  .composer { display: grid; grid-template-columns: auto auto minmax(0, auto) 1fr auto; grid-template-areas: "q q q q q" "anexo link alvo . enviar"; align-items: center; gap: 6px 6px;
               background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 12px 10px 8px 14px; box-shadow: var(--sombra); }
   .composer:focus-within { border-color: var(--brand); }
   .composer textarea { grid-area: q; border: 0; outline: 0; resize: none; background: none; color: var(--ink); min-height: 26px; max-height: 160px; padding: 2px 4px; }
   .composer textarea::placeholder { color: var(--muted); }
+  .anexar.link { grid-area: link; }
   .anexar { grid-area: anexo; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: none; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
   .anexar:hover { color: var(--brand); border-color: var(--brand); }
   .anexar:disabled { opacity: .5; cursor: wait; }
@@ -188,6 +189,36 @@
   .enviar.parando { background: var(--ink); color: var(--bg); }
   .enviar.parando .seta { display: none; } .enviar.parando .parar { display: block; }
   .privacidade { margin: 0; font-size: 12px; color: var(--muted); text-align: center; display: flex; gap: 6px; justify-content: center; align-items: center; }
+
+  /* Laboratório de parâmetros (modo aula) */
+  .lab { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px; }
+  .lab > summary { font-weight: 600; color: var(--ink); font-size: 13px; }
+  .lab-grade { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 16px; margin-top: 10px; }
+  .lab label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+  .lab label b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .lab input[type=range] { width: 100%; accent-color: var(--brand); }
+  .lab small { display: block; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  @media (max-width: 560px) { .lab-grade { grid-template-columns: 1fr; } }
+
+  /* Prompt enviado ao modelo (modo aula) */
+  .prompt-parte { margin: 8px 0; border-left: 3px solid var(--line); padding: 2px 0 2px 10px; }
+  .prompt-parte b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .prompt-parte.sistema { border-color: var(--thought); } .prompt-parte.usuario { border-color: var(--brand); }
+  .prompt-parte.ferramenta { border-color: var(--action); } .prompt-parte.assistente { border-color: var(--ok); }
+  .prompt-parte pre { margin: 4px 0 0; white-space: pre-wrap; font: 12px/1.5 ui-monospace, Consolas, monospace; max-height: 240px; overflow: auto; background: var(--soft); border-radius: 8px; padding: 8px 10px; }
+
+  /* Mapa dos embeddings */
+  .dlg-mapa { max-width: min(96vw, 860px); width: 100%; }
+  .dlg-mapa h2 { margin: 0 0 4px; font-size: 18px; }
+  .dlg-mapa > p { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+  .mapa-svg { width: 100%; height: auto; aspect-ratio: 1.4; background: var(--soft); border-radius: 14px; display: block; }
+  .mapa-svg circle { cursor: pointer; }
+  .mapa-legenda { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .mapa-legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .mapa-info { min-height: 3.2em; margin-top: 8px; font-size: 13px; background: var(--soft); border-radius: 10px; padding: 8px 12px; }
+  .dlg-link input { width: 100%; height: 42px; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; background: var(--bg); color: var(--ink); margin: 12px 0; }
+  .dlg-link .rodape-dlg { display: flex; justify-content: flex-end; gap: 8px; }
+  .escrevendo .txt::after { content: "▍"; animation: piscar 1s infinite; color: var(--brand); }
 
   /* Caixas de diálogo */
   dialog { position: fixed; border: 1px solid var(--line); border-radius: 18px; background: var(--card); color: var(--ink); padding: 24px; max-width: min(92vw, 520px); box-shadow: var(--sombra); }
@@ -261,6 +292,8 @@
           <button type="button" role="menuitemcheckbox" id="m-aula" aria-checked="false">Modo aula</button>
           <button type="button" role="menuitemcheckbox" id="apresentar" aria-checked="false" aria-pressed="false" title="Letras maiores para o projetor">Modo apresentação</button>
           <button type="button" role="menuitem" id="m-qr">QR code em tela cheia</button>
+          <button type="button" role="menuitem" id="m-mapa">Mapa dos embeddings</button>
+          <button type="button" role="menuitem" id="m-turma">Painel da turma (abre em nova aba)</button>
           <button type="button" role="menuitem" id="m-exemplos">Remover documentos de exemplo</button>
           <hr>
           <button type="button" role="menuitem" id="m-md">Baixar conversa (.md)</button>
@@ -284,8 +317,9 @@
       <button class="soltar" id="soltar" type="button">
         <svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
         <b>Arraste um arquivo ou clique para enviar</b>
-        <small>PDF, Word, PowerPoint, TXT ou MD · até 15 MB</small>
+        <small>PDF (até escaneado), Word, PowerPoint, Excel, CSV, TXT ou MD · até 15 MB</small>
       </button>
+      <button class="link-btn" id="inicio-link" type="button">ou importe uma página da web pelo link</button>
       <div class="sugs">
         <button type="button" class="so-exemplos">O que é um embedding, segundo a apostila de IA?</button>
         <button type="button" class="so-exemplos">Qual a frequência mínima para ser aprovado no IFPA?</button>
@@ -297,22 +331,34 @@
   <div class="rodape">
     <div class="progresso" id="progresso" hidden><span id="progresso-txt"></span><progress id="progresso-barra" max="100"></progress></div>
     <div class="docs-msg" id="docs-msg" role="status"></div>
+    <details class="lab so-aula" id="lab">
+      <summary>Laboratório de parâmetros da busca</summary>
+      <div class="lab-grade">
+        <label>Trechos por busca (top_k): <b id="lab-k-v">4</b><input type="range" id="lab-k" min="1" max="10" step="1" value="4"></label>
+        <label>Semelhança mínima: <b id="lab-s-v">25%</b><input type="range" id="lab-s" min="0" max="90" step="5" value="25"></label>
+        <label>Tamanho do trecho: <b id="lab-t-v">1.200</b><input type="range" id="lab-t" min="300" max="3000" step="100" value="1200"></label>
+      </div>
+      <small>Valem para as próximas perguntas (top_k e semelhança) e para os próximos envios (tamanho do trecho: reenvie o arquivo para ver a diferença). <button class="link-btn" type="button" id="lab-reset">Voltar ao padrão</button></small>
+    </details>
     <div class="chips" id="chips" aria-label="Seus documentos"></div>
     <form id="f" class="composer">
       <textarea id="q" rows="1" placeholder="Pergunte algo sobre os seus documentos..." maxlength="1000" required aria-label="Sua pergunta"></textarea>
       <button class="anexar" id="btn-up" type="button" title="Enviar documentos" aria-label="Enviar documentos">
         <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9"/></svg>
       </button>
-      <input type="file" id="arquivo" multiple accept=".pdf,.docx,.pptx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown" hidden>
+      <button class="anexar link" id="btn-link" type="button" title="Importar página da web pelo link" aria-label="Importar página da web pelo link">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+      </button>
+      <input type="file" id="arquivo" multiple accept=".pdf,.docx,.pptx,.xlsx,.csv,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain,text/markdown" hidden>
       <select id="alvo" class="pilula" aria-label="Perguntar sobre" title="Perguntar sobre qual documento"><option value="">Todos os documentos</option></select>
       <button class="enviar" id="b" type="submit" aria-label="Enviar pergunta" title="Enviar">
         <svg class="seta" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
         <svg class="parar" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14"><rect width="14" height="14" rx="3" fill="currentColor"/></svg>
       </button>
     </form>
-    <p class="privacidade" title="Os arquivos ficam só no seu espaço, o texto é enviado à OpenAI para gerar as respostas e tudo é apagado quando você remove o documento ou o servidor reinicia.">
+    <p class="privacidade" title="Os arquivos ficam só no seu espaço, o texto é enviado à OpenAI para gerar as respostas e tudo é apagado quando você remove o documento ou o servidor reinicia. As perguntas podem aparecer, sem identificação, no painel da turma.">
       <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-      Não envie documentos pessoais ou sigilosos.
+      Não envie documentos pessoais ou sigilosos. As perguntas aparecem, anônimas, no painel da turma.
     </p>
   </div>
 </div>
@@ -322,6 +368,24 @@
   <img src="/qr.svg" alt="QR code para abrir o assistente" width="620" height="620">
   <p id="dlg-url">carregando...</p>
   <small>Aponte a câmera do celular para abrir</small>
+</dialog>
+
+<dialog class="dlg-mapa" id="dlg-mapa" aria-labelledby="mapa-titulo">
+  <button class="fechar" type="button" data-fechar aria-label="Fechar">×</button>
+  <h2 id="mapa-titulo">Mapa dos embeddings</h2>
+  <p id="mapa-sub">Cada ponto é um trecho. Trechos com significado parecido ficam perto.</p>
+  <svg class="mapa-svg" id="mapa-svg" viewBox="-1.15 -0.82 2.3 1.64" role="img" aria-label="Mapa 2D dos trechos"></svg>
+  <div class="mapa-legenda" id="mapa-legenda"></div>
+  <div class="mapa-info" id="mapa-info">Passe o mouse ou toque num ponto para ver o trecho.</div>
+</dialog>
+
+<dialog class="dlg-link" id="dlg-link" aria-labelledby="link-titulo">
+  <button class="fechar" type="button" data-fechar aria-label="Fechar">×</button>
+  <h2 id="link-titulo" style="margin:0;font-size:18px">Importar página da web</h2>
+  <form id="form-link">
+    <input type="url" id="link-url" placeholder="https://..." required aria-label="Link da página">
+    <div class="rodape-dlg"><button class="btn" type="submit">Importar</button></div>
+  </form>
 </dialog>
 
 <dialog class="guia" id="dlg-guia" aria-labelledby="guia-titulo">
@@ -437,6 +501,7 @@ function salvarHistorico() {
 function enxuta(r) {
   const copia = Object.assign({}, r);
   delete copia.passos;
+  delete copia.prompt;
   copia.trechos = (r.trechos || []).slice(0, 6).map(t => Object.assign({}, t, { texto: (t.texto || '').slice(0, 600) }));
   return copia;
 }
@@ -448,7 +513,8 @@ const DICAS = [
   [/passa de \d+ ?MB/i, 'Comprima o PDF (por exemplo no ilovepdf.com) ou envie só os capítulos que interessam.'],
   [/Office válido|formato novo|\.doc\b/i, 'Abra no Word ou PowerPoint e use “Salvar como” → .docx ou .pptx.'],
   [/páginas; o limite|slides; o limite/i, 'Divida o arquivo em partes menores e envie cada uma.'],
-  [/não suportado/i, 'Formatos aceitos: PDF, DOCX, PPTX, TXT e MD.'],
+  [/não suportado/i, 'Formatos aceitos: PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), CSV, TXT e MD. Também dá para importar uma página da web pelo link.'],
+  [/não é uma página de texto|não é público|portas padrão|http:\/\/ ou https/i, 'Use o endereço completo de uma página pública (começando com https://) ou o link direto de um PDF.'],
   [/corrompido|protegido/i, 'Se o PDF tiver senha, tire a proteção (ou use “Imprimir → Salvar como PDF”) e envie de novo.'],
   [/limite diário/i, 'O limite de gastos da demonstração acabou por hoje. Volte amanhã!'],
   [/Muit[ao]s .*seguid|Muitos envios|Aguarde/i, 'Espere um minutinho e tente de novo.'],
@@ -530,6 +596,12 @@ function acoesDaResposta(box, r, pergunta) {
     setTimeout(() => { copiar.textContent = 'Copiar'; }, 2000);
   });
   acoes.append(conf, copiar);
+  if (pergunta && (r.trechos || []).length) {
+    const bm = el('button', 'destaque so-aula', 'Ver no mapa');
+    bm.type = 'button'; bm.title = 'Mostra a pergunta e os trechos como pontos num mapa 2D dos embeddings';
+    bm.addEventListener('click', () => abrirMapa(pergunta));
+    acoes.append(bm);
+  }
   // Demonstração (modo aula): a mesma pergunta respondida pelo modelo sozinho, sem os documentos.
   if (pergunta && ['respondida', 'sem_evidencia'].includes(r.status)) {
     const bt = el('button', 'destaque so-aula', 'Comparar: e se fosse sem RAG?');
@@ -577,7 +649,7 @@ function renderResposta(r, opts = {}) {
     const det = el('details', 'lidos');
     det.open = !opts.restaurado && document.body.classList.contains('aula');
     const nCit = trechos.filter(t => t.citado).length;
-    det.append(el('summary', '', 'Ver os ' + trechos.length + ' trechos que a IA leu' + (nCit ? ' (' + nCit + ' citado' + (nCit > 1 ? 's' : '') + ')' : '')));
+    det.append(el('summary', '', (trechos.length === 1 ? 'Ver o trecho que a IA leu' : 'Ver os ' + trechos.length + ' trechos que a IA leu') + (nCit ? ' (' + nCit + ' citado' + (nCit > 1 ? 's' : '') + ')' : '')));
     det.append(el('div', 'dica', 'A busca transforma a pergunta em números (embeddings) e traz os trechos mais parecidos. A IA só pode responder com o que está aqui. O que aparece marcado foi citado na resposta.'));
     // Mostra primeiro os trechos usados na resposta; o resto fica em "ver mais".
     const ordenados = [...trechos].sort((x, y) => (y.citado ? 1 : 0) - (x.citado ? 1 : 0));
@@ -621,6 +693,19 @@ function renderResposta(r, opts = {}) {
     item('Tokens:', fmt(c.tokens_entrada) + ' entrada' + (c.tokens_entrada_cache ? ' (' + fmt(c.tokens_entrada_cache) + ' em cache)' : '') + ' · ' + fmt(c.tokens_saida) + ' saída · ' + fmt(c.tokens_embedding) + ' embedding');
     box.append(div);
     acumular(c);
+  }
+
+  if (r.prompt && r.prompt.length) {
+    const det = el('details', 'so-aula');
+    const chars = r.prompt.reduce((n, pt) => n + pt.conteudo.length, 0);
+    det.append(el('summary', '', 'Ver o prompt enviado ao modelo — ' + r.prompt.length + ' partes, ~' + fmt(Math.round(chars / 4)) + ' tokens'));
+    const NOMES = { sistema: 'Instruções do sistema', historico: 'Histórico', usuario: 'Pergunta do usuário', assistente: 'Modelo', ferramenta: 'Resultado da ferramenta (trechos colados no prompt)' };
+    for (const pt of r.prompt) {
+      const bloco = el('div', 'prompt-parte ' + pt.papel);
+      bloco.append(el('b', '', NOMES[pt.papel] || pt.papel), el('pre', '', pt.conteudo));
+      det.append(bloco);
+    }
+    box.append(det);
   }
 
   if (r.passos && r.passos.length) {
@@ -695,11 +780,12 @@ async function enviar(texto) {
   controlador = new AbortController();
   modoEnviando(true);
   let final = null;
+  let recebeuTokens = false;
   try {
     const resp = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pergunta: texto, sessao_id: sessao, espaco_id: espaco, documento: alvoAtual(), exemplos: mostrarExemplos }),
+      body: JSON.stringify({ pergunta: texto, sessao_id: sessao, espaco_id: espaco, documento: alvoAtual(), exemplos: mostrarExemplos, parametros: parametrosBusca() }),
       signal: controlador.signal,
     });
     if (!resp.ok || !resp.body) {
@@ -723,6 +809,11 @@ async function enviar(texto) {
         if (evento.tipo === 'passo') {
           aoVivo.append(el('li', '', descreverPasso(evento.passo)));
           chat.scrollTop = chat.scrollHeight;
+        } else if (evento.tipo === 'token') {
+          // A resposta chegando palavra por palavra, direto do modelo.
+          if (!recebeuTokens) { recebeuTokens = true; typing.classList.add('escrevendo'); typing.classList.remove('typing'); }
+          typing.querySelector('.txt').textContent = evento.texto;
+          chat.scrollTop = chat.scrollHeight;
         } else if (evento.tipo === 'final') {
           final = evento.resposta;
         }
@@ -730,7 +821,7 @@ async function enviar(texto) {
     }
     typing.remove();
     if (!final) throw new Error('A conexão foi interrompida antes da resposta. Tente de novo.');
-    renderResposta(final, { pergunta: texto, digitar: true });
+    renderResposta(final, { pergunta: texto, digitar: !recebeuTokens });
     historico.push({ tipo: 'user', texto }, { tipo: 'bot', pergunta: texto, r: enxuta(final) });
     salvarHistorico();
   } catch (e) {
@@ -946,12 +1037,13 @@ async function enviarArquivos(lista) {
   for (const [i, arq] of arquivos.entries()) {
     const prefixo = arquivos.length > 1 ? '(' + (i + 1) + ' de ' + arquivos.length + ') ' : '';
     const ext = '.' + (arq.name.split('.').pop() || '').toLowerCase();
-    if (!limites.extensoes.includes(ext)) { erros.push([arq.name, 'Formato ' + ext + ' não suportado. Envie PDF, DOCX, PPTX, TXT ou MD.']); continue; }
+    if (!limites.extensoes.includes(ext)) { erros.push([arq.name, 'Formato ' + ext + ' não suportado. Envie PDF, DOCX, PPTX, XLSX, CSV, TXT ou MD.']); continue; }
     if (arq.size > limites.max_mb * 1024 * 1024) { erros.push([arq.name, 'O arquivo passa de ' + limites.max_mb + ' MB.']); continue; }
     const fd = new FormData();
     fd.append('espaco_id', espaco);
     fd.append('arquivo', arq);
     fd.append('exemplos', mostrarExemplos ? 'true' : 'false');
+    if (tamanhoTrecho()) fd.append('tamanho_trecho', String(tamanhoTrecho()));
     const antes = new Set(docsAtuais.filter(d => !d.exemplo).map(d => d.arquivo));
     mostrarProgresso(prefixo + 'Enviando “' + arq.name + '”... 0%', 0);
     try {
@@ -1024,7 +1116,136 @@ const areaDrop = document.querySelector('.app');
 ['dragenter', 'dragover'].forEach(ev => areaDrop.addEventListener(ev, (e) => { e.preventDefault(); areaDrop.classList.add('arrastando'); }));
 ['dragleave', 'drop'].forEach(ev => areaDrop.addEventListener(ev, (e) => { e.preventDefault(); areaDrop.classList.remove('arrastando'); }));
 areaDrop.addEventListener('drop', (e) => { if (!btnUp.disabled) enviarArquivos(e.dataTransfer && e.dataTransfer.files); });
-fetch('/api/info').then(r => r.json()).then(i => { if (i.upload) limites = i.upload; }).catch(() => {});
+
+// ---------- Laboratório de parâmetros (modo aula) ----------
+const PADRAO_BUSCA = { top_k: 4, semelhanca_minima: 0.25, tamanho_trecho: 1200 };
+const labK = document.getElementById('lab-k'), labS = document.getElementById('lab-s'), labT = document.getElementById('lab-t');
+function pintarLab() {
+  document.getElementById('lab-k-v').textContent = labK.value;
+  document.getElementById('lab-s-v').textContent = labS.value + '%';
+  document.getElementById('lab-t-v').textContent = Number(labT.value).toLocaleString('pt-BR') + ' caracteres';
+}
+function salvarLab() {
+  pintarLab();
+  try { localStorage.setItem('lab', JSON.stringify({ k: labK.value, s: labS.value, t: labT.value })); } catch (_) {}
+}
+function restaurarLab(padrao) {
+  labK.value = padrao.top_k; labS.value = Math.round(padrao.semelhanca_minima * 100); labT.value = padrao.tamanho_trecho;
+  salvarLab();
+}
+[labK, labS, labT].forEach(x => x.addEventListener('input', salvarLab));
+document.getElementById('lab-reset').addEventListener('click', () => restaurarLab(PADRAO_BUSCA));
+try {
+  const salvo = JSON.parse(localStorage.getItem('lab') || 'null');
+  if (salvo) { labK.value = salvo.k; labS.value = salvo.s; labT.value = salvo.t; }
+} catch (_) {}
+pintarLab();
+// Só no modo aula os parâmetros do laboratório valem; fora dele, o padrão do servidor.
+function parametrosBusca() {
+  if (!document.body.classList.contains('aula')) return null;
+  return { top_k: Number(labK.value), semelhanca_minima: Number(labS.value) / 100 };
+}
+function tamanhoTrecho() {
+  return document.body.classList.contains('aula') ? Number(labT.value) : null;
+}
+
+// ---------- Importar página da web pelo link ----------
+const dlgLink = document.getElementById('dlg-link');
+function abrirLink() { if (!btnUp.disabled) { dlgLink.showModal(); document.getElementById('link-url').focus(); } }
+document.getElementById('btn-link').addEventListener('click', abrirLink);
+document.getElementById('inicio-link').addEventListener('click', abrirLink);
+document.getElementById('form-link').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const url = document.getElementById('link-url').value.trim();
+  if (!url) return;
+  dlgLink.close();
+  btnUp.disabled = true;
+  avisoDocs('');
+  mostrarProgresso('Baixando e lendo a página...', null);
+  const antes = new Set(docsAtuais.filter(d => !d.exemplo).map(d => d.arquivo));
+  try {
+    const resp = await fetch('/api/documentos/url', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ espaco_id: espaco, url, exemplos: mostrarExemplos, tamanho_trecho: tamanhoTrecho() }),
+    });
+    const dados = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(detalheErro(dados, resp.status));
+    pintarDocs(dados.documentos);
+    avisoDocs(dados.mensagem);
+    document.getElementById('link-url').value = '';
+    const novo = dados.documentos.find(d => !d.exemplo && !antes.has(d.arquivo));
+    if (novo) sugerirPerguntas(novo);
+  } catch (err) {
+    avisoDocs(err instanceof TypeError ? 'Não foi possível contatar o servidor.' : err.message, true);
+  } finally {
+    progresso.hidden = true;
+    btnUp.disabled = false;
+  }
+});
+
+// ---------- Mapa dos embeddings ----------
+const dlgMapa = document.getElementById('dlg-mapa');
+const CORES_MAPA = ['#2f5bff', '#e8590c', '#12805c', '#b42ca8', '#c99400', '#0e8aa8', '#6b4fd6', '#c2321f'];
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs) { const e = document.createElementNS(SVG_NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+async function abrirMapa(pergunta) {
+  const svg = document.getElementById('mapa-svg');
+  const info = document.getElementById('mapa-info');
+  svg.replaceChildren(); document.getElementById('mapa-legenda').replaceChildren();
+  info.textContent = 'Calculando o mapa...';
+  document.getElementById('mapa-sub').textContent = pergunta
+    ? 'Cada ponto é um trecho. A estrela é a sua pergunta; os pontos com anel são os trechos mais parecidos com ela.'
+    : 'Cada ponto é um trecho dos documentos. Trechos com significado parecido ficam perto.';
+  if (!dlgMapa.open) dlgMapa.showModal();
+  try {
+    const resp = await fetch('/api/mapa', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ espaco_id: espaco, pergunta: pergunta || '', exemplos: mostrarExemplos, top_k: Number(labK.value) }),
+    });
+    const dados = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(detalheErro(dados, resp.status));
+    if (!dados.pontos.length) { info.textContent = 'Ainda não há trechos para mostrar. Envie um documento.'; return; }
+    const mostrar = (p, cor) => {
+      info.replaceChildren();
+      const t = el('b', '', (dados.documentos[p.doc] || 'Pergunta') + (p.pagina ? ', p. ' + p.pagina : ''));
+      t.style.color = cor;
+      info.append(t, document.createTextNode((p.semelhanca != null ? ' · semelhança ' + Math.round(p.semelhanca * 100) + '%' : '') + ' — ' + p.texto));
+    };
+    const destaque = dados.pontos.filter(p => p.semelhanca != null);
+    if (dados.pergunta) {
+      for (const p of destaque) svg.append(svgEl('line', { x1: dados.pergunta.x, y1: -dados.pergunta.y, x2: p.x, y2: -p.y, stroke: 'currentColor', 'stroke-width': 0.004, opacity: 0.35 }));
+    }
+    for (const p of dados.pontos) {
+      const cor = CORES_MAPA[p.doc % CORES_MAPA.length];
+      const c = svgEl('circle', { cx: p.x, cy: -p.y, r: p.semelhanca != null ? 0.028 : 0.016, fill: cor, 'fill-opacity': dados.pergunta && p.semelhanca == null ? 0.45 : 0.9 });
+      if (p.semelhanca != null) { c.setAttribute('stroke', 'currentColor'); c.setAttribute('stroke-width', 0.008); }
+      c.addEventListener('mouseenter', () => mostrar(p, cor));
+      c.addEventListener('click', () => mostrar(p, cor));
+      svg.append(c);
+    }
+    if (dados.pergunta) {
+      const q0 = dados.pergunta, r = 0.05, pts = [];
+      for (let i = 0; i < 10; i++) { const a = Math.PI / 5 * i - Math.PI / 2, rr = i % 2 ? r * 0.45 : r; pts.push((q0.x + rr * Math.cos(a)).toFixed(4) + ',' + (-q0.y + rr * Math.sin(a)).toFixed(4)); }
+      const estrela = svgEl('polygon', { points: pts.join(' '), fill: 'var(--mark)', stroke: 'currentColor', 'stroke-width': 0.006 });
+      estrela.addEventListener('mouseenter', () => { info.replaceChildren(el('b', '', 'Sua pergunta'), document.createTextNode(' — ' + q0.texto)); });
+      svg.append(estrela);
+    }
+    svg.style.color = 'var(--ink)';
+    const legenda = document.getElementById('mapa-legenda');
+    dados.documentos.forEach((d, i) => { const s = el('span'); const b = el('i'); b.style.background = CORES_MAPA[i % CORES_MAPA.length]; s.append(b, d); legenda.append(s); });
+    info.textContent = dados.pontos.length + ' trechos no mapa' + (destaque.length ? ' · ' + destaque.length + ' mais parecidos com a pergunta em destaque' : '') + '. Passe o mouse ou toque num ponto.';
+  } catch (err) {
+    info.textContent = 'Não consegui montar o mapa: ' + (err instanceof TypeError ? 'sem conexão.' : err.message);
+  }
+}
+document.getElementById('m-mapa').addEventListener('click', () => abrirMapa(''));
+document.getElementById('m-turma').addEventListener('click', () => window.open('/turma', '_blank', 'noopener'));
+
+fetch('/api/info').then(r => r.json()).then(i => {
+  if (i.upload) limites = i.upload;
+  if (i.busca) { Object.assign(PADRAO_BUSCA, i.busca); try { if (!localStorage.getItem('lab')) restaurarLab(PADRAO_BUSCA); } catch (_) {} }
+  if (i.painel_turma === false) document.getElementById('m-turma').hidden = true;
+}).catch(() => {});
 aplicarExemplos(mostrarExemplos, false);
 carregarDocs();
 

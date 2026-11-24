@@ -255,6 +255,18 @@ Recursos didáticos e de operação:
 
 **Limite diário de gasto:** `ORCAMENTO_DIARIO_USD` (padrão US$ 1,00; `0` desliga) bloqueia perguntas, comparações, sugestões e uploads quando o gasto do dia passa do teto. O controle fica em memória e zera se o servidor reiniciar, então configure também o limite de gasto no painel da OpenAI. O uso do dia aparece na lateral da interface e em `/api/info`.
 
+**Recursos didáticos (modo aula):**
+- **Laboratório de parâmetros:** controles para top_k, semelhança mínima e tamanho do trecho, que mudam a busca na hora (`parametros` em `/api/chat`; `tamanho_trecho` no upload e no link). Fora do modo aula, vale o padrão do servidor.
+- **Mapa dos embeddings** (`POST /api/mapa`): os trechos viram pontos em 2D por PCA. A pergunta aparece como estrela, e os top_k trechos mais parecidos ficam destacados com a semelhança real (cosseno).
+- **Ver o prompt:** cada resposta traz em `prompt` o que o modelo recebeu (instruções, pergunta, chamadas de ferramenta e os trechos colados).
+- **Painel da turma** (`/turma`, com `GET /api/turma`): as perguntas recentes de todos, ao vivo, para o projetor, sem identificar quem perguntou. Desliga com `PAINEL_TURMA=false`.
+- **Resposta em streaming:** o texto aparece palavra por palavra (evento `token` no SSE). Desliga com `STREAM_TOKENS=false`.
+
+**Mais fontes:**
+- **PDF escaneado:** as páginas sem texto passam por OCR (Tesseract, `por+eng`), até `MAX_PAGINAS_OCR=30` por arquivo. O Dockerfile já instala o `tesseract-ocr`.
+- **Planilhas** `.xlsx` e `.csv`: cada linha vira "Coluna: valor | ..." e a "página" citada é um bloco de 40 linhas (`MAX_LINHAS_PLANILHA=3000`).
+- **Página da web pelo link** (`POST /api/documentos/url`): baixa só endereços públicos (proteção contra SSRF: IPs privados, locais e reservados são recusados, inclusive após redirecionamentos), até 8 MB, e extrai o texto principal sem menu nem scripts. Links diretos de PDF também funcionam.
+
 **Interface (minimalista):**
 - Uma coluna só, centralizada. A tela inicial mostra a área "arraste um arquivo" e 3 sugestões, e some quando a conversa começa.
 - Caixa de pergunta única: clipe para enviar arquivos (vários de uma vez, com barra de progresso), seletor do documento ("Todos os documentos") e botão redondo de enviar, que vira **parar** durante a resposta.

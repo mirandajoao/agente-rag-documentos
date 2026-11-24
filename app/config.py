@@ -94,6 +94,15 @@ class Settings:
     # --- Upload de documentos pelo usuário ---
     max_upload_mb: int = _int("MAX_UPLOAD_MB", 15)
     max_upload_paginas: int = _int("MAX_UPLOAD_PAGINAS", 200)
+    # OCR: páginas de PDF sem texto (escaneadas) passam pelo Tesseract, até este limite por arquivo.
+    max_paginas_ocr: int = _int("MAX_PAGINAS_OCR", 30)
+    ocr_idiomas: str = os.getenv("OCR_IDIOMAS", "por+eng")
+    # Planilhas: no máximo estas linhas por arquivo (o resto é ignorado).
+    max_linhas_planilha: int = _int("MAX_LINHAS_PLANILHA", 3000)
+    # Painel da turma (/turma): mostra as perguntas recentes, sem identificar quem perguntou.
+    # Resposta aparecendo palavra por palavra (STREAM_TOKENS=false volta a mostrar só a resposta pronta).
+    stream_tokens: bool = os.getenv("STREAM_TOKENS", "true").strip().lower() in {"1", "true", "sim", "yes"}
+    painel_turma: bool = os.getenv("PAINEL_TURMA", "true").strip().lower() in {"1", "true", "sim", "yes"}
     max_documentos_por_espaco: int = _int("MAX_DOCUMENTOS_POR_ESPACO", 5)
     rate_limit_upload_por_minuto: int = _int("RATE_LIMIT_UPLOAD_PER_MINUTE", 6)
     # Se verdadeiro, os documentos de exemplo (data/pdfs) também entram nas buscas de todos.
