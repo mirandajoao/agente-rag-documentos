@@ -1,7 +1,7 @@
 """Pipeline de indexação RAG.
 
 Etapas:
-1. Ingestão documental  -> PyPDFLoader lê PDFs (ou texto puro de .txt/.md)
+1. Ingestão documental  -> PDF (PyPDFLoader), Word (.docx), PowerPoint (.pptx) e texto (.txt/.md)
 2. Fatiamento           -> RecursiveCharacterTextSplitter com separadores estruturais
 3. Vetorização          -> OpenAI text-embedding-3-small
 4. Armazenamento        -> ChromaDB persistido localmente em chroma_db/
@@ -38,7 +38,7 @@ from app.config import exigir_chave_api, settings
 log = logging.getLogger("ingest")
 
 ESPACO_EXEMPLOS = "exemplos"
-EXTENSOES_ACEITAS = {".pdf", ".txt", ".md"}
+EXTENSOES_ACEITAS = {".pdf", ".docx", ".pptx", ".txt", ".md"}
 
 # Separadores em ordem de prioridade. Primeiro as fronteiras "fortes" de
 # qualquer documento (títulos em Markdown, capítulos, seções e artigos de
@@ -102,6 +102,51 @@ def limpar_texto(texto: str) -> str:
     return texto.strip()
 
 
+def _paginas_docx(caminho: Path) -> list[tuple[int, str]]:
+    """Word não tem páginas fixas: o documento inteiro vira a "página" 1.
+
+    Títulos (estilos Heading/Título) ganham "# " para o fatiamento respeitar as seções.
+    """
+    from docx import Document as Docx
+
+    doc = Docx(str(caminho))
+    linhas: list[str] = []
+    for par in doc.paragraphs:
+        texto = par.text.strip()
+        if not texto:
+            continue
+        estilo = (par.style.name if par.style is not None else "").lower()
+        linhas.append(f"# {texto}" if estilo.startswith(("heading", "título", "titulo", "title")) else texto)
+    for tabela in doc.tables:
+        for linha in tabela.rows:
+            celulas = [c.text.strip() for c in linha.cells if c.text.strip()]
+            if celulas:
+                linhas.append(" | ".join(dict.fromkeys(celulas)))
+    return [(1, "\n\n".join(linhas))]
+
+
+def _paginas_pptx(caminho: Path) -> list[tuple[int, str]]:
+    """PowerPoint: cada slide vira uma "página" (o número citado é o do slide)."""
+    from pptx import Presentation
+
+    paginas: list[tuple[int, str]] = []
+    for numero, slide in enumerate(Presentation(str(caminho)).slides, start=1):
+        partes: list[str] = []
+        for forma in slide.shapes:
+            if getattr(forma, "has_text_frame", False) and forma.text_frame.text.strip():
+                partes.append(forma.text_frame.text.strip())
+            if getattr(forma, "has_table", False):
+                for linha in forma.table.rows:
+                    celulas = [c.text.strip() for c in linha.cells if c.text.strip()]
+                    if celulas:
+                        partes.append(" | ".join(celulas))
+        if slide.has_notes_slide and slide.notes_slide.notes_text_frame.text.strip():
+            partes.append("Notas: " + slide.notes_slide.notes_text_frame.text.strip())
+        if partes:
+            paginas.append((numero, f"# Slide {numero}\n" + "\n".join(partes)))
+    return paginas
+
+
 def ler_arquivo(caminho: Path, titulo: str, espaco: str, max_paginas: int | None = None) -> Document:
     """Lê um arquivo e devolve UM Document com o texto inteiro.
 
@@ -111,7 +156,7 @@ def ler_arquivo(caminho: Path, titulo: str, espaco: str, max_paginas: int | None
     """
     ext = caminho.suffix.lower()
     if ext not in EXTENSOES_ACEITAS:
-        raise DocumentoInvalido(f"Formato {ext or '(sem extensão)'} não suportado. Envie PDF, TXT ou MD.")
+        raise DocumentoInvalido(f"Formato {ext or '(sem extensão)'} não suportado. Envie PDF, DOCX, PPTX, TXT ou MD.")
 
     if ext == ".pdf":
         try:
@@ -120,6 +165,13 @@ def ler_arquivo(caminho: Path, titulo: str, espaco: str, max_paginas: int | None
             raise DocumentoInvalido(f"Não foi possível ler o PDF ({type(exc).__name__}). O arquivo pode estar corrompido ou protegido.") from exc
         if max_paginas and len(paginas) > max_paginas:
             raise DocumentoInvalido(f"O PDF tem {len(paginas)} páginas; o limite é {max_paginas}.")
+    elif ext in {".docx", ".pptx"}:
+        try:
+            paginas = _paginas_docx(caminho) if ext == ".docx" else _paginas_pptx(caminho)
+        except Exception as exc:
+            raise DocumentoInvalido(f"Não foi possível ler o arquivo ({type(exc).__name__}). Ele pode estar corrompido ou protegido.") from exc
+        if max_paginas and len(paginas) > max_paginas:
+            raise DocumentoInvalido(f"A apresentação tem {len(paginas)} slides; o limite é {max_paginas}.")
     else:
         bruto = caminho.read_bytes()
         try:
@@ -141,7 +193,7 @@ def ler_arquivo(caminho: Path, titulo: str, espaco: str, max_paginas: int | None
 
     if not partes:
         raise DocumentoInvalido(
-            "Não encontrei texto no arquivo. Se for um PDF escaneado (imagem), ele precisa passar por OCR antes."
+            "Não encontrei texto no arquivo. Se for um PDF escaneado ou slides só com imagens, o texto precisa passar por OCR antes."
         )
     return Document(
         page_content="\n".join(partes),
@@ -318,10 +370,20 @@ def documentos_do_espaco(espaco: str, incluir_exemplos: bool = True) -> list[dic
         chave = (m.get("espaco", ""), m.get("arquivo", ""))
         item = vistos.setdefault(
             chave,
-            {"documento": m.get("fonte", "?"), "arquivo": m.get("arquivo", "?"), "exemplo": chave[0] == ESPACO_EXEMPLOS, "trechos": 0},
+            {"documento": m.get("fonte", "?"), "arquivo": m.get("arquivo", "?"), "exemplo": chave[0] == ESPACO_EXEMPLOS, "trechos": 0, "paginas": 0},
         )
         item["trechos"] += 1
+        item["paginas"] = max(item["paginas"], int(m.get("pagina") or 0))
     return sorted(vistos.values(), key=lambda d: (d["exemplo"], d["documento"].lower()))
+
+
+def trechos_do_documento(espaco: str, arquivo: str) -> list[Document]:
+    """Todos os trechos de um documento, na ordem em que aparecem no texto."""
+    dados = abrir_vectorstore()._collection.get(
+        where={"$and": [{"espaco": espaco}, {"arquivo": arquivo}]}, include=["documents", "metadatas"]
+    )
+    docs = [Document(page_content=t, metadata=m or {}) for t, m in zip(dados["documents"], dados["metadatas"])]
+    return sorted(docs, key=lambda d: int(d.metadata.get("start_index") or 0))
 
 
 def main() -> None:

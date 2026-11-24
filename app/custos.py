@@ -62,7 +62,8 @@ def contar_tokens(texto: str) -> int:
         return max(1, len(texto) // 4)
 
 
-def calcular_custo(mensagens_do_turno: list[BaseMessage]) -> Custo:
+def calcular_custo(mensagens_do_turno: list[BaseMessage], uso_extra: list[dict] | None = None) -> Custo:
+    """Custo do turno. `uso_extra` = chamadas ao LLM feitas dentro das ferramentas (ex.: resumo por partes)."""
     entrada = cache = saida = chamadas = 0
     tokens_embedding = 0
 
@@ -78,6 +79,12 @@ def calcular_custo(mensagens_do_turno: list[BaseMessage]) -> Custo:
         for call in msg.tool_calls or []:
             if call.get("name") == "buscar_documentos":
                 tokens_embedding += contar_tokens(str((call.get("args") or {}).get("consulta", "")))
+
+    for uso in uso_extra or []:
+        chamadas += 1
+        entrada += uso.get("input_tokens", 0)
+        saida += uso.get("output_tokens", 0)
+        cache += (uso.get("input_token_details") or {}).get("cache_read", 0) or 0
 
     p_in, p_cache, p_out = _preco_llm(settings.chat_model)
     p_emb = PRECOS_EMBEDDING.get(settings.embedding_model, 0.02)
