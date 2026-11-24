@@ -36,6 +36,7 @@ def criar_chat(temperatura: float | None = None, max_tokens: int | None = None):
         max_tokens=max_tokens,
         timeout=settings.request_timeout,
         max_retries=settings.max_retries,
+        stream_usage=True,  # tokens também na resposta em streaming (cálculo de custo)
     )
 
 

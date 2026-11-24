@@ -37,7 +37,8 @@ from app.config import exigir_chave_api, settings
 log = logging.getLogger("ingest")
 
 ESPACO_EXEMPLOS = "exemplos"
-EXTENSOES_ACEITAS = {".pdf", ".docx", ".pptx", ".txt", ".md"}
+EXTENSOES_ACEITAS = {".pdf", ".docx", ".pptx", ".xlsx", ".csv", ".txt", ".md"}
+FORMATOS_ACEITOS = "PDF, DOCX, PPTX, XLSX, CSV, TXT ou MD"
 
 # Separadores em ordem de prioridade. Primeiro as fronteiras "fortes" de
 # qualquer documento (títulos em Markdown, capítulos, seções e artigos de
@@ -147,6 +148,90 @@ def _paginas_pptx(caminho: Path) -> list[tuple[int, str]]:
     return paginas
 
 
+def _ocr_paginas(caminho: Path, numeros: list[int]) -> dict[int, str]:
+    """OCR (Tesseract) das páginas indicadas de um PDF escaneado. Devolve {página: texto}.
+
+    Sem o Tesseract instalado, devolve {} e o arquivo segue o fluxo normal.
+    """
+    if not numeros:
+        return {}
+    try:
+        import pypdfium2 as pdfium
+        import pytesseract
+    except ImportError:
+        log.warning("OCR indisponível: instale pypdfium2 e pytesseract")
+        return {}
+    textos: dict[int, str] = {}
+    try:
+        pdf = pdfium.PdfDocument(str(caminho))
+        for numero in numeros[: settings.max_paginas_ocr]:
+            imagem = pdf[numero - 1].render(scale=300 / 72).to_pil()  # ~300 dpi
+            textos[numero] = pytesseract.image_to_string(imagem, lang=settings.ocr_idiomas)
+        pdf.close()
+    except Exception as exc:  # sem tesseract, idioma ausente, PDF estranho: segue sem OCR
+        log.warning("OCR falhou em %s: %s", caminho.name, exc)
+    return textos
+
+
+def _linhas_em_paginas(titulo: str, cabecalho: list[str], linhas: list[list[str]], inicio_pagina: int) -> list[tuple[int, str]]:
+    """Planilha -> "páginas" de 40 linhas, cada linha como "Coluna: valor | ...".
+
+    Repetir o nome da coluna em cada linha deixa o trecho compreensível sozinho
+    (o fatiamento pode separar a linha do cabeçalho).
+    """
+    paginas: list[tuple[int, str]] = []
+    for i in range(0, len(linhas), 40):
+        bloco = linhas[i : i + 40]
+        texto = [f"# {titulo} (linhas {i + 2} a {i + 1 + len(bloco)})"]
+        for linha in bloco:
+            pares = [f"{c or f'Coluna {j + 1}'}: {v}" for j, (c, v) in enumerate(zip(cabecalho + [""] * len(linha), linha)) if v]
+            if pares:
+                texto.append(" | ".join(pares))
+        paginas.append((inicio_pagina + len(paginas), "\n".join(texto)))
+    return paginas
+
+
+def _paginas_planilha(caminho: Path) -> list[tuple[int, str]]:
+    """Excel (cada aba) ou CSV. A "página" citada é o bloco de 40 linhas."""
+    limite = settings.max_linhas_planilha
+    tabelas: list[tuple[str, list[list[str]]]] = []
+    if caminho.suffix.lower() == ".xlsx":
+        from openpyxl import load_workbook
+
+        livro = load_workbook(str(caminho), read_only=True, data_only=True)
+        for aba in livro.worksheets:
+            linhas = []
+            for linha in aba.iter_rows(values_only=True):
+                valores = ["" if v is None else str(v).strip() for v in linha]
+                if any(valores):
+                    linhas.append(valores)
+                if len(linhas) > limite:
+                    break
+            tabelas.append((f"Planilha {aba.title}", linhas))
+        livro.close()
+    else:
+        import csv
+
+        bruto = caminho.read_bytes()
+        try:
+            texto = bruto.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            texto = bruto.decode("latin-1")
+        try:
+            dialeto = csv.Sniffer().sniff(texto[:5000], delimiters=",;\t|")
+        except csv.Error:
+            dialeto = csv.excel
+        linhas = [[c.strip() for c in l] for l in csv.reader(texto.splitlines(), dialeto) if any(c.strip() for c in l)]
+        tabelas.append((caminho.stem, linhas[: limite + 1]))
+    paginas: list[tuple[int, str]] = []
+    for nome, linhas in tabelas:
+        if len(linhas) < 1:
+            continue
+        cabecalho, corpo = linhas[0], linhas[1:] or [linhas[0]]
+        paginas += _linhas_em_paginas(nome, cabecalho, corpo, len(paginas) + 1)
+    return paginas
+
+
 def ler_arquivo(caminho: Path, titulo: str, espaco: str, max_paginas: int | None = None) -> Document:
     """Lê um arquivo e devolve UM Document com o texto inteiro.
 
@@ -155,8 +240,9 @@ def ler_arquivo(caminho: Path, titulo: str, espaco: str, max_paginas: int | None
     pelos offsets guardados em metadata["inicios_pagina"].
     """
     ext = caminho.suffix.lower()
+    paginas_ocr = 0
     if ext not in EXTENSOES_ACEITAS:
-        raise DocumentoInvalido(f"Formato {ext or '(sem extensão)'} não suportado. Envie PDF, DOCX, PPTX, TXT ou MD.")
+        raise DocumentoInvalido(f"Formato {ext or '(sem extensão)'} não suportado. Envie {FORMATOS_ACEITOS}.")
 
     if ext == ".pdf":
         try:
@@ -165,6 +251,12 @@ def ler_arquivo(caminho: Path, titulo: str, espaco: str, max_paginas: int | None
             raise DocumentoInvalido(f"Não foi possível ler o PDF ({type(exc).__name__}). O arquivo pode estar corrompido ou protegido.") from exc
         if max_paginas and len(paginas) > max_paginas:
             raise DocumentoInvalido(f"O PDF tem {len(paginas)} páginas; o limite é {max_paginas}.")
+        # Páginas sem texto (escaneadas): reconhece o texto da imagem com OCR.
+        vazias = [n for n, t in paginas if len(limpar_texto(t)) < 30]
+        if vazias:
+            reconhecidas = _ocr_paginas(caminho, vazias)
+            paginas = [(n, reconhecidas.get(n) or t) for n, t in paginas]
+            paginas_ocr = sum(1 for t in reconhecidas.values() if len(limpar_texto(t)) >= 30)
     elif ext in {".docx", ".pptx"}:
         try:
             paginas = _paginas_docx(caminho) if ext == ".docx" else _paginas_pptx(caminho)
@@ -172,6 +264,11 @@ def ler_arquivo(caminho: Path, titulo: str, espaco: str, max_paginas: int | None
             raise DocumentoInvalido(f"Não foi possível ler o arquivo ({type(exc).__name__}). Ele pode estar corrompido ou protegido.") from exc
         if max_paginas and len(paginas) > max_paginas:
             raise DocumentoInvalido(f"A apresentação tem {len(paginas)} slides; o limite é {max_paginas}.")
+    elif ext in {".xlsx", ".csv"}:
+        try:
+            paginas = _paginas_planilha(caminho)
+        except Exception as exc:
+            raise DocumentoInvalido(f"Não foi possível ler a planilha ({type(exc).__name__}). Ela pode estar corrompida ou protegida.") from exc
     else:
         bruto = caminho.read_bytes()
         try:
@@ -193,11 +290,11 @@ def ler_arquivo(caminho: Path, titulo: str, espaco: str, max_paginas: int | None
 
     if not partes:
         raise DocumentoInvalido(
-            "Não encontrei texto no arquivo. Se for um PDF escaneado ou slides só com imagens, o texto precisa passar por OCR antes."
+            "Não encontrei texto no arquivo, nem com OCR. Se for um PDF escaneado com baixa qualidade ou slides só com imagens, o texto precisa ser digitado ou reconhecido antes."
         )
     return Document(
         page_content="\n".join(partes),
-        metadata={"fonte": titulo, "arquivo": caminho.name, "espaco": espaco, "inicios_pagina": inicios},
+        metadata={"fonte": titulo, "arquivo": caminho.name, "espaco": espaco, "inicios_pagina": inicios, "paginas_ocr": paginas_ocr},
     )
 
 
@@ -228,10 +325,11 @@ def _pagina_do_offset(inicios: list[tuple[int, int]], pos: int) -> int:
     return inicios[max(i, 0)][1]
 
 
-def fatiar(documentos: list[Document]) -> list[Document]:
+def fatiar(documentos: list[Document], tamanho: int | None = None) -> list[Document]:
+    tamanho = tamanho or settings.chunk_size
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=settings.chunk_size,
-        chunk_overlap=settings.chunk_overlap,
+        chunk_size=tamanho,
+        chunk_overlap=min(settings.chunk_overlap, tamanho // 4),
         separators=SEPARADORES,
         keep_separator="start",
         length_function=len,
@@ -336,17 +434,22 @@ def construir_indice(rebuild: bool = False) -> int:
 # Documentos enviados pelos usuários
 # ---------------------------------------------------------------------------
 
-def indexar_arquivo(caminho: Path, espaco: str, titulo: str) -> int:
+def indexar_arquivo(caminho: Path, espaco: str, titulo: str, tamanho_trecho: int | None = None) -> int:
     """Lê, fatia e indexa um arquivo enviado. Devolve o número de trechos criados."""
+    return indexar_arquivo_detalhado(caminho, espaco, titulo, tamanho_trecho)[0]
+
+
+def indexar_arquivo_detalhado(caminho: Path, espaco: str, titulo: str, tamanho_trecho: int | None = None) -> tuple[int, int]:
+    """Como indexar_arquivo, mas devolve (trechos criados, páginas lidas por OCR)."""
     exigir_chave_api()
     doc = ler_arquivo(caminho, titulo, espaco, max_paginas=settings.max_upload_paginas)
-    chunks = fatiar([doc])
+    chunks = fatiar([doc], tamanho_trecho)
     log.info("Upload [%s] %s: %d páginas, %d trechos", espaco[:8], caminho.name, len(doc.metadata["inicios_pagina"]), len(chunks))
     with _trava_escrita:
         # Reenviar um arquivo com o mesmo nome substitui a versão anterior.
         abrir_vectorstore()._collection.delete(where={"$and": [{"espaco": espaco}, {"arquivo": caminho.name}]})
         _gravar(abrir_vectorstore(), chunks)
-    return len(chunks)
+    return len(chunks), int(doc.metadata.get("paginas_ocr") or 0)
 
 
 def remover_documentos(espaco: str, arquivo: str | None = None) -> None:

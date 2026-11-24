@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel da turma · Converse com seus documentos</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #f7f8fb; --card: #fff; --ink: #0f172a; --muted: #5b6478; --line: #e3e7ef; --soft: #f1f3f8;
+          --brand: #2f5bff; --ok: #12805c; --medio: #b7791f; --warn: #c2321f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0c111d; --card: #141b2b; --ink: #e8ecf5; --muted: #9aa4bb; --line: #263049; --soft: #1a2236;
+            --brand: #6b8cff; --ok: #3ccf91; --medio: #f0b44c; --warn: #f97066; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 Inter, system-ui, sans-serif; }
+  .tela { max-width: 1400px; margin: 0 auto; padding: 24px 32px; display: grid; grid-template-columns: 1fr 260px; gap: 28px; min-height: 100dvh; }
+  h1 { margin: 0 0 4px; font-size: 28px; letter-spacing: -.02em; display: flex; align-items: center; gap: 10px; }
+  h1::before { content: ""; width: 14px; height: 14px; border-radius: 4px; background: var(--brand); }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .numeros { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .numero { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+  .numero b { display: block; font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .numero span { color: var(--muted); font-size: 13px; }
+  .lista { display: grid; gap: 12px; }
+  .item { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px; animation: entrar .4s ease; }
+  @keyframes entrar { from { opacity: 0; transform: translateY(-6px); } }
+  .item .p { font-size: 20px; font-weight: 600; }
+  .item .r { color: var(--muted); margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .item .meta { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; font-size: 13px; color: var(--muted); align-items: center; }
+  .dot { display: inline-flex; align-items: center; gap: 6px; }
+  .dot::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.alta::before { background: var(--ok); } .dot.media::before { background: var(--medio); } .dot.baixa::before { background: var(--warn); }
+  .fonte { background: var(--soft); border-radius: 999px; padding: 2px 10px; color: var(--ink); }
+  .vazio { color: var(--muted); text-align: center; padding: 60px 0; font-size: 18px; }
+  aside { position: sticky; top: 24px; align-self: start; text-align: center; }
+  aside img { width: 100%; background: #fff; border-radius: 16px; padding: 8px; }
+  aside p { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+  aside b { color: var(--ink); font-size: 16px; }
+  @media (max-width: 900px) { .tela { grid-template-columns: 1fr; padding: 16px; } aside { display: none; } .numeros { grid-template-columns: repeat(2, 1fr); } }
+  @media (prefers-reduced-motion: reduce) { .item { animation: none; } }
+</style>
+</head>
+<body>
+<div class="tela">
+  <main>
+    <h1>Painel da turma</h1>
+    <p class="sub">As perguntas que vocês estão fazendo ao agente, ao vivo (sem identificar ninguém).</p>
+    <div class="numeros">
+      <div class="numero"><b id="n-ativos">0</b><span>navegadores ativos (15 min)</span></div>
+      <div class="numero"><b id="n-perguntas">0</b><span>perguntas</span></div>
+      <div class="numero"><b id="n-respondidas">–</b><span>respondidas com fonte</span></div>
+      <div class="numero"><b id="n-custo">US$ 0,00</b><span>custo total</span></div>
+    </div>
+    <div class="lista" id="lista"><div class="vazio">Esperando a primeira pergunta... 👀</div></div>
+  </main>
+  <aside>
+    <img src="/qr.svg" alt="QR code para abrir o assistente" width="240" height="240">
+    <p>Entre pelo celular<br><b id="url">...</b></p>
+  </aside>
+</div>
+<script>
+const lista = document.getElementById('lista');
+const NOMES = { alta: 'confiança alta', media: 'confiança média', baixa: 'confiança baixa' };
+let ultimoTopo = null;
+function el(tag, cls, texto) { const e = document.createElement(tag); if (cls) e.className = cls; if (texto !== undefined) e.textContent = texto; return e; }
+function haQuanto(seg) {
+  if (seg < 60) return 'agora';
+  if (seg < 3600) return 'há ' + Math.floor(seg / 60) + ' min';
+  return 'há ' + Math.floor(seg / 3600) + ' h';
+}
+function pintar(d) {
+  document.getElementById('n-ativos').textContent = d.navegadores_ativos;
+  document.getElementById('n-perguntas').textContent = d.perguntas;
+  document.getElementById('n-respondidas').textContent = d.perguntas ? Math.round(d.respondidas / d.perguntas * 100) + '%' : '–';
+  document.getElementById('n-custo').textContent = 'US$ ' + d.custo_usd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  if (!d.ativo) { lista.replaceChildren(el('div', 'vazio', 'O painel da turma está desligado neste servidor (PAINEL_TURMA=false).')); return; }
+  if (!d.recentes.length) return;
+  const topo = d.recentes[0].hora;
+  // Só redesenha quando chega pergunta nova (mantém a animação só nas novas).
+  if (topo === ultimoTopo) {
+    lista.querySelectorAll('[data-hora]').forEach(e => { e.textContent = haQuanto(d.agora - Number(e.dataset.hora)); });
+    return;
+  }
+  const novas = ultimoTopo === null ? d.recentes : d.recentes.filter(r => r.hora > ultimoTopo);
+  ultimoTopo = topo;
+  if (lista.querySelector('.vazio')) lista.replaceChildren();
+  for (const r of novas.slice().reverse()) {
+    const item = el('article', 'item');
+    item.append(el('div', 'p', r.pergunta));
+    if (r.resposta) item.append(el('div', 'r', r.resposta));
+    const meta = el('div', 'meta');
+    const hora = el('span', '', haQuanto(d.agora - r.hora)); hora.dataset.hora = r.hora;
+    meta.append(el('span', 'dot ' + (r.confianca || ''), NOMES[r.confianca] || r.status), hora);
+    for (const f of r.fontes || []) meta.append(el('span', 'fonte', f));
+    item.append(meta);
+    lista.prepend(item);
+  }
+  while (lista.children.length > 30) lista.lastElementChild.remove();
+}
+async function atualizar() {
+  try { pintar(await (await fetch('/api/turma')).json()); } catch (_) {}
+}
+fetch('/api/info').then(r => r.json()).then(i => { document.getElementById('url').textContent = i.url.replace(/^https?:\/\//, ''); }).catch(() => {});
+atualizar();
+setInterval(atualizar, 3000);
+</script>
+</body>
+</html>

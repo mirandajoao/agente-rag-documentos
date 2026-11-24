@@ -24,23 +24,29 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from app.agent import construir_agente, perguntar, perguntar_stream
 from app.config import BASE_DIR, settings
 from app.guardrails import LimitadorDeTaxa, limitador
+from app import turma
 from app.ingest import (
     EXTENSOES_ACEITAS,
+    FORMATOS_ACEITOS,
     DocumentoInvalido,
     construir_indice,
     documentos_do_espaco,
-    indexar_arquivo,
+    indexar_arquivo_detalhado,
     indice_existe,
     remover_documentos,
     titulo_amigavel,
 )
 from app.extras import comparar_sem_rag, sugerir_perguntas
+from app.mapa import montar_mapa
+from app.web import LinkInvalido, baixar, html_para_texto
 from app.orcamento import MENSAGEM_LIMITE, orcamento
 from app.schemas import (
     ComparacaoIn,
     ComparacaoOut,
     DocumentoOut,
     DocumentosOut,
+    LinkIn,
+    MapaIn,
     PerguntaIn,
     RespostaOut,
     SugestoesIn,
@@ -96,8 +102,10 @@ async def chat(dados: PerguntaIn, request: Request) -> RespostaOut:
     _exigir_pronto_e_orcamento()
     # O agente é síncrono; rodar em threadpool evita travar o event loop.
     documento = dados.documento.model_dump() if dados.documento else None
-    resp = await run_in_threadpool(perguntar, dados.pergunta, dados.sessao_id, dados.espaco_id, documento, dados.exemplos)
-    orcamento.registrar(resp.custo.custo_usd)
+    parametros = dados.parametros.model_dump(exclude_none=True) if dados.parametros else None
+    resp = await run_in_threadpool(perguntar, dados.pergunta, dados.sessao_id, dados.espaco_id, documento, dados.exemplos, parametros)
+    orcamento.registrar(resp.custo.custo_usd if resp.custo else 0)
+    turma.registrar(dados.espaco_id or dados.sessao_id, dados.pergunta, resp.model_dump())
     return resp
 
 
@@ -129,10 +137,13 @@ async def chat_stream(dados: PerguntaIn, request: Request):
     _exigir_pronto_e_orcamento()
     documento = dados.documento.model_dump() if dados.documento else None
 
+    parametros = dados.parametros.model_dump(exclude_none=True) if dados.parametros else None
+
     def eventos():
-        for evento in perguntar_stream(dados.pergunta, dados.sessao_id, dados.espaco_id, documento, dados.exemplos):
+        for evento in perguntar_stream(dados.pergunta, dados.sessao_id, dados.espaco_id, documento, dados.exemplos, parametros):
             if evento["tipo"] == "final":
                 orcamento.registrar(((evento["resposta"].get("custo") or {}).get("custo_usd")) or 0)
+                turma.registrar(dados.espaco_id or dados.sessao_id, dados.pergunta, evento["resposta"])
             yield f"event: {evento['tipo']}\ndata: {json.dumps(evento, ensure_ascii=False)}\n\n"
 
     # StreamingResponse percorre o gerador síncrono em threadpool, sem travar o event loop.
@@ -236,36 +247,19 @@ async def listar_documentos(espaco_id: str = Query(...), exemplos: bool = Query(
     return await run_in_threadpool(_listar, espaco_id, "", exemplos)
 
 
-@app.post("/api/documentos", response_model=DocumentosOut)
-async def enviar_documento(
-    request: Request,
-    espaco_id: str = Form(...),
-    arquivo: UploadFile = File(...),
-    exemplos: bool = Form(True),
+async def _salvar_e_indexar(
+    espaco_id: str, nome: str, conteudo: bytes, titulo: str, exemplos: bool, tamanho_trecho: int | None, origem: str = ""
 ) -> DocumentosOut:
-    _validar_espaco(espaco_id)
-    if not ESTADO["pronto"]:
-        raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
-    _limitar(request, espaco_id, upload=True)
-    if orcamento.excedido():
-        raise HTTPException(429, MENSAGEM_LIMITE)
-
-    nome = _nome_seguro(arquivo.filename or "")
+    """Valida, grava no espaço do usuário e indexa. Usado pelo upload e pelo envio por link."""
     ext = Path(nome).suffix.lower()
     if ext not in EXTENSOES_ACEITAS:
-        raise HTTPException(415, "Formato não suportado. Envie um arquivo PDF, DOCX, PPTX, TXT ou MD.")
-
-    # Lê no máximo o limite + 1 byte: arquivo maior é recusado sem ocupar memória à toa.
-    limite = settings.max_upload_mb * 1024 * 1024
-    conteudo = await arquivo.read(limite + 1)
-    if len(conteudo) > limite:
-        raise HTTPException(413, f"O arquivo passa de {settings.max_upload_mb} MB.")
+        raise HTTPException(415, f"Formato não suportado. Envie um arquivo {FORMATOS_ACEITOS}.")
     if not conteudo:
         raise HTTPException(422, "O arquivo está vazio.")
     if ext == ".pdf" and not conteudo.startswith(b"%PDF"):
         raise HTTPException(415, "O arquivo não parece ser um PDF válido.")
-    if ext in {".docx", ".pptx"} and not conteudo.startswith(b"PK"):
-        raise HTTPException(415, "O arquivo não parece ser um documento do Office válido (.docx/.pptx). Arquivos .doc/.ppt antigos precisam ser salvos no formato novo.")
+    if ext in {".docx", ".pptx", ".xlsx"} and not conteudo.startswith(b"PK"):
+        raise HTTPException(415, "O arquivo não parece ser um documento do Office válido (.docx/.pptx/.xlsx). Arquivos .doc/.ppt/.xls antigos precisam ser salvos no formato novo.")
 
     existentes = await run_in_threadpool(documentos_do_espaco, espaco_id, False)
     if nome not in {d["arquivo"] for d in existentes} and len(existentes) >= settings.max_documentos_por_espaco:
@@ -275,10 +269,8 @@ async def enviar_documento(
     pasta.mkdir(parents=True, exist_ok=True)
     destino = pasta / nome
     destino.write_bytes(conteudo)
-    titulo = titulo_amigavel(Path(Path(arquivo.filename or nome).name))
-
     try:
-        trechos = await run_in_threadpool(indexar_arquivo, destino, espaco_id, titulo)
+        trechos, paginas_ocr = await run_in_threadpool(indexar_arquivo_detalhado, destino, espaco_id, titulo, tamanho_trecho)
     except DocumentoInvalido as exc:
         destino.unlink(missing_ok=True)
         raise HTTPException(422, str(exc)) from exc
@@ -291,7 +283,65 @@ async def enviar_documento(
     # Custo aproximado dos embeddings do upload (~300 tokens por trecho de 1.200 caracteres).
     orcamento.registrar(trechos * 300 * 0.02 / 1_000_000)
 
-    return await run_in_threadpool(_listar, espaco_id, f"“{titulo}” foi lido e dividido em {trechos} trecho{'s' if trechos != 1 else ''}. Já pode perguntar!", exemplos)
+    detalhes = f" ({paginas_ocr} página{'s' if paginas_ocr != 1 else ''} lida{'s' if paginas_ocr != 1 else ''} por OCR)" if paginas_ocr else ""
+    mensagem = f"“{titulo}”{origem} foi lido{detalhes} e dividido em {trechos} trecho{'s' if trechos != 1 else ''}. Já pode perguntar!"
+    return await run_in_threadpool(_listar, espaco_id, mensagem, exemplos)
+
+
+@app.post("/api/documentos", response_model=DocumentosOut)
+async def enviar_documento(
+    request: Request,
+    espaco_id: str = Form(...),
+    arquivo: UploadFile = File(...),
+    exemplos: bool = Form(True),
+    tamanho_trecho: int | None = Form(None, ge=200, le=4000),
+) -> DocumentosOut:
+    _validar_espaco(espaco_id)
+    if not ESTADO["pronto"]:
+        raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
+    _limitar(request, espaco_id, upload=True)
+    if orcamento.excedido():
+        raise HTTPException(429, MENSAGEM_LIMITE)
+
+    nome = _nome_seguro(arquivo.filename or "")
+    if Path(nome).suffix.lower() not in EXTENSOES_ACEITAS:
+        raise HTTPException(415, f"Formato não suportado. Envie um arquivo {FORMATOS_ACEITOS}.")
+    # Lê no máximo o limite + 1 byte: arquivo maior é recusado sem ocupar memória à toa.
+    limite = settings.max_upload_mb * 1024 * 1024
+    conteudo = await arquivo.read(limite + 1)
+    if len(conteudo) > limite:
+        raise HTTPException(413, f"O arquivo passa de {settings.max_upload_mb} MB.")
+    titulo = titulo_amigavel(Path(Path(arquivo.filename or nome).name))
+    return await _salvar_e_indexar(espaco_id, nome, conteudo, titulo, exemplos, tamanho_trecho)
+
+
+@app.post("/api/documentos/url", response_model=DocumentosOut)
+async def enviar_link(dados: LinkIn, request: Request) -> DocumentosOut:
+    """Importa uma página da web (ou um PDF por link) como documento do usuário."""
+    _validar_espaco(dados.espaco_id)
+    if not ESTADO["pronto"]:
+        raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
+    _limitar(request, dados.espaco_id, upload=True)
+    if orcamento.excedido():
+        raise HTTPException(429, MENSAGEM_LIMITE)
+    try:
+        conteudo, tipo, final = await run_in_threadpool(baixar, dados.url)
+    except LinkInvalido as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        log.info("Falha ao baixar %s: %s", dados.url, exc)
+        raise HTTPException(422, "Não consegui abrir esse link agora. Confira o endereço ou tente outro.") from exc
+    if tipo == "application/pdf":
+        base = Path(final.split("?")[0].rstrip("/")).stem or "pagina"
+        titulo, nome = titulo_amigavel(Path(base)), _nome_seguro(base + ".pdf")
+    else:
+        if tipo in {"text/plain", "text/markdown"}:
+            titulo, texto = Path(final.split("?")[0].rstrip("/")).stem or "pagina", f"Fonte: {final}\n\n" + conteudo.decode("utf-8", "replace")
+        else:
+            titulo, texto = await run_in_threadpool(html_para_texto, conteudo, final)
+        titulo = titulo[:80]
+        nome, conteudo = _nome_seguro(titulo + ".md"), texto.encode("utf-8")
+    return await _salvar_e_indexar(dados.espaco_id, nome, conteudo, titulo, dados.exemplos, dados.tamanho_trecho, " (página da web)")
 
 
 @app.delete("/api/documentos", response_model=DocumentosOut)
@@ -312,6 +362,31 @@ async def remover_documento(espaco_id: str = Query(...), arquivo: str | None = Q
     else:
         shutil.rmtree(pasta, ignore_errors=True)
     return await run_in_threadpool(_listar, espaco_id, "Documento removido." if nome else "Seus documentos foram removidos.", exemplos)
+
+
+@app.post("/api/mapa")
+async def mapa(dados: MapaIn, request: Request):
+    """Pontos 2D dos trechos (PCA dos embeddings) e da pergunta, para o modo aula."""
+    _validar_espaco(dados.espaco_id)
+    if not ESTADO["pronto"]:
+        raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
+    _limitar(request, dados.espaco_id)
+    try:
+        return await run_in_threadpool(montar_mapa, dados.espaco_id, dados.pergunta, dados.exemplos, dados.top_k)
+    except Exception as exc:
+        log.exception("Falha ao montar o mapa")
+        raise HTTPException(500, "Não foi possível montar o mapa agora.") from exc
+
+
+@app.get("/api/turma")
+def painel_turma():
+    """Perguntas recentes da turma (sem identificar ninguém), para o projetor."""
+    return turma.estado()
+
+
+@app.get("/turma", include_in_schema=False)
+def pagina_turma():
+    return FileResponse(STATIC / "turma.html")
 
 
 def url_publica(request: Request) -> str:
@@ -343,6 +418,12 @@ def info(request: Request):
             "max_documentos": settings.max_documentos_por_espaco,
         },
         "orcamento": orcamento.status(),
+        "busca": {
+            "top_k": settings.top_k,
+            "semelhanca_minima": round(1 - settings.max_distance, 2),
+            "tamanho_trecho": settings.chunk_size,
+        },
+        "painel_turma": settings.painel_turma,
     }
 
 

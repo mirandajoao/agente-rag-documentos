@@ -91,14 +91,17 @@ def _bm25(espaco: str, arquivo: str, _versao_base: int) -> BM25Retriever | None:
     return retriever
 
 
-def _busca_vetorial(consulta: str, filtro: dict, k: int) -> list[tuple[Document, str]]:
+def _busca_vetorial(consulta: str, filtro: dict, k: int, max_distancia: float | None = None) -> list[tuple[Document, str]]:
     if k <= 0:
         return []
+    limite = settings.max_distance if max_distancia is None else max_distancia
     vetoriais = _vectorstore().similarity_search_with_score(consulta, k=k, filter=filtro)
-    return [(d, f"semântica {round(1 - dist, 3)}") for d, dist in vetoriais if dist <= settings.max_distance]
+    return [(d, f"semântica {round(1 - dist, 3)}") for d, dist in vetoriais if dist <= limite]
 
 
-def busca_hibrida(consulta: str, espaco: str, alvo: dict | None = None, exemplos: bool = True) -> list[tuple[Document, str]]:
+def busca_hibrida(
+    consulta: str, espaco: str, alvo: dict | None = None, exemplos: bool = True, parametros: dict | None = None
+) -> list[tuple[Document, str]]:
     """Busca vetorial (semântica) + BM25 (lexical), sem duplicatas.
 
     Com um documento escolhido (`alvo`), a busca fica restrita a ele. Sem
@@ -121,10 +124,16 @@ def busca_hibrida(consulta: str, espaco: str, alvo: dict | None = None, exemplos
         if (settings.incluir_exemplos and exemplos) or not espaco:
             grupos.append((ESPACO_EXEMPLOS, ""))
 
+    # Laboratório de parâmetros (modo aula): top_k e semelhança mínima podem vir da interface.
+    parametros = parametros or {}
+    top_k = int(parametros.get("top_k") or settings.top_k)
+    minima = parametros.get("semelhanca_minima")
+    max_distancia = None if minima is None else 1 - float(minima)
+
     relevantes: list[tuple[Document, str]] = []
     com_evidencia: list[tuple[str, str]] = []
     for esp, arq in grupos:
-        achados = _busca_vetorial(consulta, _filtro(esp, arq), settings.top_k)
+        achados = _busca_vetorial(consulta, _filtro(esp, arq), top_k, max_distancia)
         if achados:
             com_evidencia.append((esp, arq))
             relevantes += achados
@@ -159,6 +168,11 @@ def _configurable(runtime: ToolRuntime | None) -> dict:
 
 def _espaco_da_execucao(runtime: ToolRuntime | None) -> str:
     return str(_configurable(runtime).get("espaco_id") or "")
+
+
+def _parametros_da_execucao(runtime: ToolRuntime | None) -> dict:
+    """Parâmetros de busca escolhidos no laboratório do modo aula (ou {} = padrão do servidor)."""
+    return dict(_configurable(runtime).get("parametros") or {})
 
 
 def _exemplos_da_execucao(runtime: ToolRuntime | None) -> bool:
@@ -225,7 +239,7 @@ def buscar_documentos(consulta: str, pensamento: str, runtime: ToolRuntime) -> s
     alvo = _alvo_da_execucao(runtime)
 
     try:
-        resultados = busca_hibrida(consulta, espaco, alvo, _exemplos_da_execucao(runtime))
+        resultados = busca_hibrida(consulta, espaco, alvo, _exemplos_da_execucao(runtime), _parametros_da_execucao(runtime))
     except Exception as exc:
         log.exception("Falha na busca vetorial")
         return f"ERRO_BUSCA: a base vetorial está indisponível no momento ({type(exc).__name__})."
