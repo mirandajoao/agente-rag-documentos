@@ -272,7 +272,7 @@ Recursos didáticos e de operação:
   - **Moderação do painel**, com a mesma senha.
 
   Rotas: `POST /api/ministrante/entrar`, `GET /api/ministrante/estado` e `POST /api/ministrante/controles`.
-- **Moderação do painel:** palavrões aparecem mascarados automaticamente. Com a senha dos ministrantes definida, o "Modo professor" do painel permite ocultar uma pergunta e limpar o painel (`POST /api/turma/ocultar` e `/api/turma/limpar`).
+- **Moderação do painel:** palavrões aparecem mascarados automaticamente. Aberto pelo Modo ministrante, o painel já vem com a moderação (ocultar uma pergunta e limpar o painel), sem pedir senha de novo; aberto direto, é só leitura (`POST /api/turma/ocultar` e `/api/turma/limpar`).
 - **Resposta em streaming:** o texto aparece palavra por palavra (evento `token` no SSE). Desliga com `STREAM_TOKENS=false`.
 
 **Mais fontes:**

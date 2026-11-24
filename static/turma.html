@@ -43,6 +43,7 @@
   .selo.mod { background: var(--soft); color: var(--muted); }
   .ocultar { margin-left: auto; border: 1px solid var(--line); background: none; color: var(--muted); border-radius: 8px; padding: 2px 10px; font: inherit; font-size: 12px; cursor: pointer; }
   .ocultar:hover { color: var(--warn); border-color: var(--warn); }
+  .prof[hidden] { display: none; }
   .prof { margin-top: 24px; font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .prof button, .prof input { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 8px; padding: 5px 10px; }
   .prof button { cursor: pointer; }
@@ -71,9 +72,8 @@
     </div>
     <div class="lista" id="lista"><div class="vazio">Esperando a primeira pergunta... 👀</div></div>
     <div class="prof" id="prof" hidden>
-      <button type="button" id="prof-entrar">Modo professor</button>
-      <form id="prof-form" hidden><input type="password" id="prof-senha" placeholder="Senha do professor" aria-label="Senha do professor" autocomplete="current-password"> <button type="submit">Entrar</button></form>
-      <span id="prof-ativo" hidden>Modo professor ativo · <button type="button" class="perigo" id="prof-limpar">Limpar painel</button> <button type="button" id="prof-sair">Sair</button></span>
+      <span>Modo ministrante · moderação ativa</span>
+      <button type="button" class="perigo" id="prof-limpar">Limpar painel</button>
       <span id="prof-msg"></span>
     </div>
   </main>
@@ -86,50 +86,35 @@
 const lista = document.getElementById('lista');
 const NOMES = { alta: 'confiança alta', media: 'confiança média', baixa: 'confiança baixa' };
 let ultimoTopo = null;
+// Moderação: só quando o painel é aberto pelo Modo ministrante do app (a senha vem na
+// cópia do sessionStorage que o navegador faz ao abrir a aba). Quem abre /turma direto só vê.
 let senhaProf = '';
-try { senhaProf = sessionStorage.getItem('senha_prof') || ''; } catch (_) {}
+try { senhaProf = sessionStorage.getItem('senha_ministrante') || ''; } catch (_) {}
 const prof = document.getElementById('prof');
 const profMsg = document.getElementById('prof-msg');
 function pintarProf() {
-  document.getElementById('prof-entrar').hidden = !!senhaProf;
-  document.getElementById('prof-form').hidden = true;
-  document.getElementById('prof-ativo').hidden = !senhaProf;
-  document.body.classList.toggle('professor', !!senhaProf);
+  prof.hidden = !senhaProf;
   lista.querySelectorAll('.ocultar').forEach(b => { b.hidden = !senhaProf; });
+}
+async function conferirSenha() {
+  if (!senhaProf) return;
+  try {
+    const r = await fetch('/api/ministrante/estado', { headers: { 'X-Ministrante': senhaProf } });
+    if (!r.ok) senhaProf = '';
+  } catch (_) { senhaProf = ''; }
+  pintarProf();
 }
 async function moderar(acao, id) {
   const r = await fetch('/api/turma/' + acao, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ senha: senhaProf, id }) });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) {
     profMsg.textContent = typeof d.detail === 'string' ? d.detail : 'Erro ' + r.status;
-    if (r.status === 401) { senhaProf = ''; try { sessionStorage.removeItem('senha_prof'); } catch (_) {} pintarProf(); }
+    if (r.status === 401) { senhaProf = ''; pintarProf(); }
     return false;
   }
   profMsg.textContent = '';
   return true;
 }
-document.getElementById('prof-entrar').addEventListener('click', () => {
-  document.getElementById('prof-entrar').hidden = true;
-  document.getElementById('prof-form').hidden = false;
-  document.getElementById('prof-senha').focus();
-});
-document.getElementById('prof-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  senhaProf = document.getElementById('prof-senha').value;
-  document.getElementById('prof-senha').value = '';
-  // Confere a senha com uma ação inofensiva: ocultar um id que não existe (404 = senha certa).
-  const r = await fetch('/api/turma/ocultar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ senha: senhaProf, id: 'verificacao' }) });
-  if (r.status === 404) {
-    try { sessionStorage.setItem('senha_prof', senhaProf); } catch (_) {}
-    profMsg.textContent = '';
-  } else {
-    const d = await r.json().catch(() => ({}));
-    profMsg.textContent = typeof d.detail === 'string' ? d.detail : 'Erro ' + r.status;
-    senhaProf = '';
-  }
-  pintarProf();
-});
-document.getElementById('prof-sair').addEventListener('click', () => { senhaProf = ''; try { sessionStorage.removeItem('senha_prof'); } catch (_) {} pintarProf(); });
 document.getElementById('prof-limpar').addEventListener('click', async () => {
   if (!confirm('Limpar todas as perguntas e zerar os números do painel?')) return;
   if (await moderar('limpar')) { ultimoTopo = null; lista.replaceChildren(el('div', 'vazio', 'Esperando a primeira pergunta... 👀')); atualizar(); }
@@ -146,7 +131,6 @@ function pintar(d) {
   document.getElementById('n-respondidas').textContent = d.perguntas ? Math.round(d.respondidas / d.perguntas * 100) + '%' : '–';
   document.getElementById('n-bloqueadas').textContent = d.bloqueadas;
   document.getElementById('n-recusas').textContent = d.recusadas + ' vez' + (d.recusadas === 1 ? '' : 'es') + ' o agente não inventou';
-  prof.hidden = !d.moderacao;
   // Some do painel o que o professor ocultou (ou o que saiu da lista).
   const ids = new Set(d.recentes.map(r => r.id));
   lista.querySelectorAll('[data-id]').forEach(e => { if (!ids.has(e.dataset.id)) e.remove(); });
@@ -191,6 +175,7 @@ async function atualizar() {
 }
 fetch('/api/info').then(r => r.json()).then(i => { document.getElementById('url').textContent = i.url.replace(/^https?:\/\//, ''); }).catch(() => {});
 pintarProf();
+conferirSenha();
 atualizar();
 setInterval(atualizar, 3000);
 </script>

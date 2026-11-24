@@ -1729,7 +1729,9 @@ document.getElementById('min-limite-form').addEventListener('submit', (e) => {
   enviarControles({ limite_diario_usd: v }, 'Limite do dia ajustado para ' + usd(v) + '.');
 });
 document.getElementById('min-sair').addEventListener('click', () => { sairMinistrante(); document.getElementById('min-msg').textContent = 'Você saiu do Modo ministrante.'; });
-document.getElementById('min-turma').addEventListener('click', () => window.open('/turma', '_blank', 'noopener'));
+// Sem "noopener": assim o navegador copia o sessionStorage (com a senha) para a aba do painel,
+// que já abre com a moderação ligada. Depois o vínculo entre as abas é cortado.
+document.getElementById('min-turma').addEventListener('click', () => { const w = window.open('/turma', '_blank'); if (w) w.opener = null; });
 
 // Aviso de pausa para todos (atualiza a cada 15 s).
 function pintarPausa(c) {
