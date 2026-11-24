@@ -1672,9 +1672,9 @@ function pintarEstadoMin(d) {
   }
   const tipos = Object.entries(n.envios_por_tipo).sort((a, b) => b[1] - a[1]).map(([t, q]) => t.toUpperCase() + ': ' + q).join(' · ');
   document.getElementById('min-tipos').textContent = tipos ? 'Tipos enviados: ' + tipos : 'Nenhum documento enviado ainda.';
-  document.getElementById('min-banco').textContent = d.persistencia
-    ? '💾 Uso, painel e controles salvos no banco: sobrevivem a deploys e reinícios.'
-    : '⚠️ Sem banco conectado: uso, painel e controles zeram quando o servidor reinicia.';
+  const aviso = document.getElementById('min-banco');
+  aviso.textContent = d.persistencia ? '' : '⚠️ Sem banco conectado: uso, painel e controles zeram quando o servidor reinicia.';
+  aviso.hidden = !!d.persistencia;
 }
 async function atualizarMin() {
   if (!senhaMin || !dlgMin.open) return;
