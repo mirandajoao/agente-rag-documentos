@@ -66,6 +66,7 @@ class ParametrosBusca(BaseModel):
 
     top_k: int | None = Field(None, ge=1, le=12)
     semelhanca_minima: float | None = Field(None, ge=0, le=0.95)
+    rerank: bool | None = Field(None, description="Liga/desliga o reranking só nesta pergunta (None = padrão do servidor)")
 
 
 class PerguntaIn(BaseModel):
@@ -159,6 +160,7 @@ class TrechoLido(BaseModel):
     documento: str
     pagina: int | None = None
     relevancia: float | None = Field(None, description="Semelhança de 0 a 1 (só na busca semântica)")
+    nota: int | None = Field(None, description="Nota de 0 a 10 dada pelo reranking (None = reranking desligado)")
     tipo_busca: Literal["semântica", "lexical", "resumo"] = "semântica"
     origem: Literal["usuario", "exemplo"] = "usuario"
     texto: str = ""

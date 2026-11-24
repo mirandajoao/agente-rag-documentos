@@ -31,6 +31,8 @@ def main() -> int:
     testes = sorted(PASTA.glob("teste_*.py"))
     if filtro:
         testes = [t for t in testes if any(f in t.stem for f in filtro)]
+    # Os testes usam modelos falsos; o reranking só fica ligado no teste dele.
+    os.environ.setdefault("RERANK", "off")
     resultado: list[tuple[str, bool, float]] = []
     for teste in testes:
         if teste.stem in {"teste_persistencia", "teste_documentos_banco", "teste_memoria"} and not os.getenv("TEST_DATABASE_URL"):

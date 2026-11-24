@@ -574,6 +574,7 @@ def info(request: Request):
             "top_k": settings.top_k,
             "semelhanca_minima": round(1 - settings.max_distance, 2),
             "tamanho_trecho": settings.chunk_size,
+            "rerank": settings.rerank not in {"off", "0", "false", "nao", "não", ""},
         },
         "painel_turma": settings.painel_turma,
         "ministrante_disponivel": controle.disponivel(),

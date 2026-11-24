@@ -159,12 +159,14 @@ def extrair_trechos(turno: list[BaseMessage], resp: RespostaAgente) -> list[Trec
                 continue
             vistos.add(chave)
             rel = m["rel"].strip()
-            numero = re.search(r"[-\d.]+$", rel)
+            numero = re.search(r"semântica\s+([-\d.]+)", rel)
+            nota = re.search(r"nota\s+(\d+)", rel)
             trechos.append(
                 TrechoLido(
                     documento=m["doc"],
                     pagina=int(m["pag"]),
-                    relevancia=max(0.0, min(1.0, float(numero.group()))) if rel.startswith("semântica") and numero else None,
+                    relevancia=max(0.0, min(1.0, float(numero.group(1)))) if numero else None,
+                    nota=int(nota.group(1)) if nota else None,
                     tipo_busca="semântica" if rel.startswith("semântica") else ("resumo" if rel.startswith("resumo") else "lexical"),
                     origem="exemplo" if (m["origem"] or "").strip() == "exemplo" else "usuario",
                     texto=corpo if len(corpo) <= 700 else corpo[:697] + "...",
