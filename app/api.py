@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from app.agent import construir_agente, perguntar, perguntar_stream
 from app.config import BASE_DIR, settings
 from app.guardrails import LimitadorDeTaxa, limitador
-from app import controle, turma
+from app import controle, persistencia, turma
 from app.ingest import (
     ESPACO_EXEMPLOS,
     EXTENSOES_ACEITAS,
@@ -69,6 +69,11 @@ ESTADO = {"pronto": False, "erro": None}
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # Banco (opcional): devolve o uso do dia, os controles e o painel salvos antes do reinício.
+    try:
+        await run_in_threadpool(persistencia.iniciar)
+    except Exception:
+        log.exception("Falha ao iniciar a persistência; seguindo só em memória")
     # Indexa os PDFs na primeira subida (ex.: novo deploy no Railway, cujo disco é efêmero).
     try:
         if not indice_existe():
@@ -456,6 +461,7 @@ def _estado_ministrante() -> dict:
     t = turma.estado()
     return {
         "controles": {**controle.estado(), "limite_diario_usd": orcamento.status()["limite_usd"]},
+        "persistencia": persistencia.ativo(),
         "orcamento": orcamento.status(),
         "numeros": {
             **controle.numeros(),
