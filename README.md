@@ -255,17 +255,15 @@ Recursos didáticos e de operação:
 
 **Limite diário de gasto:** `ORCAMENTO_DIARIO_USD` (padrão US$ 1,00; `0` desliga) bloqueia perguntas, comparações, sugestões e uploads quando o gasto do dia passa do teto. O controle fica em memória e zera se o servidor reiniciar, então configure também o limite de gasto no painel da OpenAI. O uso do dia aparece na lateral da interface e em `/api/info`.
 
-**Modo apresentação:** no menu **Mais**, aumenta tudo em 30% para o projetor (a escolha fica salva no navegador).
-
-**Documentos de exemplo:** aparecem agrupados num chip só. O × do chip (ou o menu **Mais**) tira os exemplos da tela **e da busca** daquele navegador; a interface envia `exemplos: false` em `/api/chat` e `/api/chat/stream` e `exemplos=false` em `/api/documentos`. Dá para trazer de volta pelo mesmo menu.
-
-**Interface (menu Mais e respostas):**
-- Interruptor de tema claro/escuro no topo (estilo iPhone; sem escolha salva, segue o sistema), QR code em tela cheia e guia rápido de 3 passos (aparece na primeira visita).
-- Baixar a conversa em Markdown ou imprimir / salvar em PDF; a conversa fica salva no navegador e volta ao recarregar (sem o raciocínio, com trechos encurtados).
-- Em cada resposta: copiar com as fontes, semáforo de confiança com explicação, frase citada destacada no trecho e PDF aberto numa gaveta lateral já na página citada (no celular, abre em nova aba).
-- Botão **Parar** durante a resposta e **Tentar de novo** em erros; erros de upload vêm com a dica de solução (PDF escaneado → OCR pelo Google Docs, limite de documentos, tamanho, .doc antigo...).
-- Envio de vários arquivos de uma vez, com barra de progresso real; no celular a lista de documentos recolhe e a caixa de pergunta fica sempre visível.
-- Atalhos: `/` vai para a pergunta, `Esc` fecha menu e visualizador.
+**Interface (minimalista):**
+- Uma coluna só, centralizada. A tela inicial mostra a área "arraste um arquivo" e 3 sugestões, e some quando a conversa começa.
+- Caixa de pergunta única: clipe para enviar arquivos (vários de uma vez, com barra de progresso), seletor do documento ("Todos os documentos") e botão redondo de enviar, que vira **parar** durante a resposta.
+- Os documentos aparecem como chips acima da caixa; os de exemplo ficam num chip só, e o × tira os exemplos da tela **e da busca** daquele navegador (`exemplos: false` em `/api/chat`, `/api/chat/stream` e `/api/documentos`). O menu **Mais** traz de volta.
+- Cada resposta mostra o texto, as fontes (chips com documento e página, que abrem o PDF na página citada) e a bolinha de confiança. Os trechos lidos ficam em "Ver os N trechos".
+- **Modo aula** (menu Mais): mostra os bastidores para a oficina, com os trechos abertos e a frase citada destacada, o custo de cada pergunta, o raciocínio ReAct ao vivo e "Comparar: e se fosse sem RAG?".
+- **Modo apresentação** (menu Mais): tudo 25% maior para o projetor. O mesmo menu tem o QR code em tela cheia, baixar a conversa (.md), imprimir/PDF, o guia rápido e o custo da sessão.
+- Interruptor de tema claro/escuro no topo, estilo iPhone: o ícone vira sol ou lua conforme o tema e, sem escolha salva, segue o sistema.
+- Conversa salva no navegador (volta ao recarregar), erros com dica de solução e atalhos `/` (pergunta) e `Esc` (fecha).
 
 `GET /health` → `200 {"status":"ok"}` quando o agente está pronto. · `GET /qr.svg` → QR code da aplicação. · `GET /api/info` → URL pública e modelo.
 
