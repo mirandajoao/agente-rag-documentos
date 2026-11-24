@@ -41,6 +41,8 @@ from app.schemas import (
     ComparacaoOut,
     DocumentoOut,
     DocumentosOut,
+    FeedbackIn,
+    FeedbackOut,
     PerguntaIn,
     RespostaOut,
     SugestoesIn,
@@ -73,6 +75,9 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Converse com os seus documentos", version="2.0.0", lifespan=lifespan)
 limitador_upload = LimitadorDeTaxa(settings.rate_limit_upload_por_minuto)
+limitador_feedback = LimitadorDeTaxa(20)
+# Contagem de 👍/👎 desde que o servidor subiu (os detalhes ficam no log).
+FEEDBACK = {"positivos": 0, "negativos": 0}
 
 
 @app.get("/health")
@@ -301,6 +306,16 @@ async def remover_documento(espaco_id: str = Query(...), arquivo: str | None = Q
     return await run_in_threadpool(_listar, espaco_id, "Documento removido." if nome else "Seus documentos foram removidos.")
 
 
+@app.post("/api/feedback", response_model=FeedbackOut)
+async def feedback(dados: FeedbackIn, request: Request) -> FeedbackOut:
+    if not limitador_feedback.permitir(_cliente(request)):
+        raise HTTPException(429, "Muitas avaliações seguidas. Aguarde um minuto.")
+    FEEDBACK["positivos" if dados.voto == "positivo" else "negativos"] += 1
+    # Uma linha JSON por avaliação: dá para filtrar no log do Railway com "FEEDBACK".
+    log.info("FEEDBACK %s", json.dumps(dados.model_dump(exclude={"sessao_id"}), ensure_ascii=False))
+    return FeedbackOut(**FEEDBACK)
+
+
 def url_publica(request: Request) -> str:
     """URL que os alunos devem abrir (QR code). Prioriza a configurada no ambiente."""
     if settings.public_url:
@@ -330,6 +345,7 @@ def info(request: Request):
             "max_documentos": settings.max_documentos_por_espaco,
         },
         "orcamento": orcamento.status(),
+        "feedback": dict(FEEDBACK),
     }
 
 

@@ -79,6 +79,20 @@ class ComparacaoOut(BaseModel):
     custo: Custo
 
 
+class FeedbackIn(BaseModel):
+    sessao_id: str = Field(..., min_length=8, max_length=64, pattern=ID_PATTERN)
+    voto: Literal["positivo", "negativo"]
+    motivo: str = Field("", max_length=200)
+    pergunta: str = Field("", max_length=1000)
+    resposta: str = Field("", max_length=4000)
+
+
+class FeedbackOut(BaseModel):
+    ok: bool = True
+    positivos: int
+    negativos: int
+
+
 class SugestoesIn(BaseModel):
     espaco_id: str = Field(..., min_length=8, max_length=64, pattern=ID_PATTERN)
     arquivo: str = Field(..., min_length=1, max_length=120, pattern=r"^[A-Za-z0-9_.-]+$")
