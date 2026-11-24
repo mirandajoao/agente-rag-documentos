@@ -339,7 +339,6 @@
           <button type="button" role="menuitem" id="m-mapa">Mapa dos embeddings</button>
           <button type="button" role="menuitem" id="m-fatia">Ver o fatiamento de um documento</button>
           <button type="button" role="menuitem" id="m-desafio">Desafie o agente</button>
-          <button type="button" role="menuitem" id="m-turma">Painel da turma (abre em nova aba)</button>
           <button type="button" role="menuitem" id="m-exemplos">Remover documentos de exemplo</button>
           <hr>
           <button type="button" role="menuitem" id="m-md">Baixar conversa (.md)</button>
@@ -1464,12 +1463,11 @@ async function compararModelos(bt, pergunta) {
   } catch (e) { bt.disabled = false; bt.textContent = rotulo + ' (erro: ' + msgErro(e) + ')'; }
 }
 
-document.getElementById('m-turma').addEventListener('click', () => window.open('/turma', '_blank', 'noopener'));
 
 fetch('/api/info').then(r => r.json()).then(i => {
   if (i.upload) limites = i.upload;
   if (i.busca) { Object.assign(PADRAO_BUSCA, i.busca); try { if (!localStorage.getItem('lab')) restaurarLab(PADRAO_BUSCA); } catch (_) {} }
-  if (i.painel_turma === false) document.getElementById('m-turma').hidden = true;
+  if (i.painel_turma === false) document.getElementById('min-turma').hidden = true;
 }).catch(() => {});
 aplicarExemplos(mostrarExemplos, false);
 carregarDocs();
