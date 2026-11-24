@@ -181,6 +181,9 @@ def iniciar() -> bool:
         with _conectar() as conexao:
             for sql in TABELAS:
                 conexao.execute(sql)
+            from app import acervo
+
+            acervo.preparar(conexao)
             estado = _carregar(conexao)
     except Exception as exc:
         log.warning("Banco indisponível (%s): seguindo só em memória", type(exc).__name__)

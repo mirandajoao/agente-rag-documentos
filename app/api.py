@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from app.agent import construir_agente, perguntar, perguntar_stream
 from app.config import BASE_DIR, settings
 from app.guardrails import LimitadorDeTaxa, limitador
-from app import controle, monitoramento, persistencia, turma
+from app import acervo, controle, monitoramento, persistencia, turma
 from app.ingest import (
     ESPACO_EXEMPLOS,
     EXTENSOES_ACEITAS,
@@ -81,6 +81,12 @@ async def lifespan(_: FastAPI):
         if not indice_existe():
             log.info("Índice vetorial não encontrado — construindo a partir de %s", settings.pdf_dir)
             await run_in_threadpool(construir_indice)
+        # Documentos enviados antes do reinício (com DATABASE_URL) voltam para o índice.
+        try:
+            await run_in_threadpool(acervo.restaurar)
+            marcar_base_alterada()
+        except Exception:
+            log.exception("Falha ao restaurar os documentos enviados; seguindo sem eles")
         construir_agente()
         ESTADO["pronto"] = True
         log.info("Agente pronto (modelo=%s, embeddings=%s)", settings.chat_model, settings.embedding_model)

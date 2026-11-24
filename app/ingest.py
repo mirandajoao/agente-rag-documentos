@@ -449,7 +449,21 @@ def indexar_arquivo_detalhado(caminho: Path, espaco: str, titulo: str, tamanho_t
         # Reenviar um arquivo com o mesmo nome substitui a versão anterior.
         abrir_vectorstore()._collection.delete(where={"$and": [{"espaco": espaco}, {"arquivo": caminho.name}]})
         _gravar(abrir_vectorstore(), chunks)
+    _guardar_no_banco(espaco, caminho, titulo, chunks)
     return len(chunks), int(doc.metadata.get("paginas_ocr") or 0)
+
+
+def _guardar_no_banco(espaco: str, caminho: Path, titulo: str, chunks: list[Document]) -> None:
+    """Com DATABASE_URL, guarda o arquivo e os trechos (com os embeddings já calculados) no Postgres."""
+    from app import acervo, persistencia
+
+    if not persistencia.ativo() or not chunks:
+        return
+    try:
+        dados = abrir_vectorstore()._collection.get(ids=[c.id for c in chunks], include=["documents", "metadatas", "embeddings"])
+        acervo.salvar(espaco, caminho, titulo, list(dados["ids"]), list(dados["documents"]), list(dados["metadatas"]), list(dados["embeddings"]))
+    except Exception:  # o banco é um extra: o documento já está pronto para perguntas
+        log.exception("Falha ao guardar o documento no banco")
 
 
 def remover_documentos(espaco: str, arquivo: str | None = None) -> None:
@@ -459,6 +473,9 @@ def remover_documentos(espaco: str, arquivo: str | None = None) -> None:
     filtro = {"espaco": espaco} if not arquivo else {"$and": [{"espaco": espaco}, {"arquivo": arquivo}]}
     with _trava_escrita:
         abrir_vectorstore()._collection.delete(where=filtro)
+    from app import acervo
+
+    acervo.remover(espaco, arquivo)
 
 
 def documentos_do_espaco(espaco: str, incluir_exemplos: bool = True) -> list[dict]:
