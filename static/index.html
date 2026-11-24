@@ -8,19 +8,29 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#2f5bff">
+<script>try { const t = localStorage.getItem('tema'); if (t === 'claro' || t === 'escuro') document.documentElement.dataset.tema = t; } catch (_) {}</script>
 <style>
   :root {
     --bg: #f2f4f8; --card: #ffffff; --ink: #0b1530; --muted: #4a5571; --line: #dce1ea;
     --brand: #2f5bff; --brand-ink: #ffffff; --user: #e7edff; --mark: #e4ff3a;
     --thought: #0e6b8a; --action: #9a6200; --obs: #6b7280; --warn: #b42318;
   }
+  /* Tema: automático (segue o sistema), claro ou escuro (escolhido no menu "Mais"). */
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-tema="claro"]) {
       --bg: #0d1220; --card: #151c2e; --ink: #e8ecf5; --muted: #a2acc2; --line: #273049;
       --brand: #6b8cff; --brand-ink: #0b1530; --user: #1c2647; --mark: #e4ff3a;
       --thought: #5cc1e0; --action: #e0ae4f; --obs: #9ca3af; --warn: #f97066;
     }
   }
+  :root[data-tema="escuro"] {
+    --bg: #0d1220; --card: #151c2e; --ink: #e8ecf5; --muted: #a2acc2; --line: #273049;
+    --brand: #6b8cff; --brand-ink: #0b1530; --user: #1c2647; --mark: #e4ff3a;
+    --thought: #5cc1e0; --action: #e0ae4f; --obs: #9ca3af; --warn: #f97066;
+  }
+  :root { --ok: #12805c; --medio: #b7791f; }
+  :root[data-tema="escuro"] { --ok: #3ccf91; --medio: #f0b44c; }
+  @media (prefers-color-scheme: dark) { :root:not([data-tema="claro"]) { --ok: #3ccf91; --medio: #f0b44c; } }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
          font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
@@ -135,6 +145,92 @@
   body.apresentacao .bot .txt { font-size: 1.08em; }
   #apresentar[aria-pressed="true"] { color: var(--brand); border-color: var(--brand); }
   .wrap.arrastando { outline: 3px dashed var(--brand); outline-offset: -6px; border-radius: 12px; }
+
+  /* Menu "Mais" no cabeçalho */
+  .mais { position: relative; }
+  .mais > summary { list-style: none; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; white-space: nowrap; user-select: none; }
+  .mais > summary::-webkit-details-marker { display: none; }
+  .mais[open] > summary, .mais > summary:hover { color: var(--brand); border-color: var(--brand); }
+  .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 240px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 32px rgba(0,0,0,.18); display: grid; }
+  .menu button { text-align: left; border: 0; border-radius: 8px; padding: 9px 12px; background: none; color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+  .menu button:hover, .menu button:focus-visible { background: var(--bg); color: var(--brand); }
+  .menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+  .menu small { color: var(--muted); }
+
+  /* Caixas de diálogo (QR em tela cheia e guia) */
+  dialog { border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink); padding: 24px; max-width: min(92vw, 560px); }
+  dialog::backdrop { background: rgba(5, 10, 25, .6); }
+  .dlg-qr { max-width: min(96vw, 760px); text-align: center; }
+  .dlg-qr img { width: min(80vmin, 620px); height: auto; background: #fff; border-radius: 12px; display: block; margin: 0 auto; }
+  .dlg-qr p { font-size: clamp(16px, 3vw, 26px); font-weight: 700; margin: 14px 0 4px; overflow-wrap: anywhere; }
+  .fechar { position: absolute; top: 10px; right: 12px; border: 0; background: none; color: var(--muted); font-size: 26px; line-height: 1; cursor: pointer; padding: 4px 8px; }
+  dialog { position: fixed; }
+  .guia h2 { margin: 0 0 4px; font-size: 20px; }
+  .guia ol { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 12px; }
+  .guia li { display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: start; }
+  .guia li b { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--brand); color: var(--brand-ink); }
+  .guia li span { padding-top: 6px; }
+  .guia .rodape { display: flex; justify-content: flex-end; gap: 8px; }
+  .btn { background: var(--brand); color: var(--brand-ink); border: 0; border-radius: 10px; padding: 10px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  .btn.sec { background: none; color: var(--muted); border: 1px solid var(--line); font-weight: 400; }
+  .qr img { cursor: zoom-in; }
+
+  /* Visualizador do documento (gaveta lateral) */
+  .gaveta { position: fixed; top: 0; right: 0; bottom: 0; width: min(720px, 92vw); z-index: 40; background: var(--card); border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgba(0,0,0,.2); display: flex; flex-direction: column; transform: translateX(105%); visibility: hidden; transition: transform .2s ease, visibility 0s .2s; }
+  .gaveta.aberta { transform: none; visibility: visible; transition: transform .2s ease; }
+  .gaveta-top { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .gaveta-top b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gaveta-top a, .gaveta-top button { color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; font: inherit; font-size: 13px; background: none; cursor: pointer; text-decoration: none; }
+  .gaveta iframe { flex: 1; border: 0; width: 100%; background: #fff; }
+  @media (prefers-reduced-motion: reduce) { .gaveta { transition: none; } }
+
+  /* Semáforo de confiança */
+  .conf { display: inline-flex; align-items: center; gap: 6px; cursor: help; }
+  .conf::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .conf.alta::before { background: var(--ok); } .conf.media::before { background: var(--medio); } .conf.baixa::before { background: var(--warn); }
+
+  /* Frase citada destacada dentro do trecho */
+  .trecho mark { background: var(--mark); color: #0b1530; border-radius: 3px; padding: 0 2px; }
+
+  /* Ações da resposta: copiar, avaliar, comparar */
+  .acoes-resp .discreto { border-color: var(--line); color: var(--muted); }
+  .acoes-resp .discreto:hover { color: var(--brand); border-color: var(--brand); }
+  .acoes-resp .discreto[aria-pressed="true"] { color: var(--brand); border-color: var(--brand); background: var(--user); }
+  .motivos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); margin-top: 8px; width: 100%; }
+  .motivos button { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+  .erro-acoes { margin-top: 10px; }
+  .dica-erro { margin-top: 6px; font-size: 13px; color: var(--ink); background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+  .restaurada { align-self: center; font-size: 12px; color: var(--muted); border: 1px dashed var(--line); border-radius: 999px; padding: 3px 12px; }
+
+  /* Progresso do envio */
+  .progresso { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  .progresso[hidden] { display: none; }
+  .progresso progress { width: 100%; height: 8px; accent-color: var(--brand); }
+  form button.parar { background: var(--warn); color: #fff; cursor: pointer; }
+
+  /* Celular: documentos recolhíveis e caixa de pergunta sempre visível */
+  .docs-toggle { display: none; }
+  @media (max-width: 560px) {
+    .docs-toggle { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; min-height: 44px; }
+    .docs-top b { display: none; }
+    .docs-top { flex-wrap: nowrap; }
+    .docs-top .btn-up { flex: 1; }
+    .docs.recolhido .chips, .docs.recolhido .privacidade { display: none; }
+    form { position: sticky; bottom: 0; background: var(--bg); padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+    .alvo label { display: none; }
+    .gaveta { width: 100vw; }
+  }
+
+  /* Impressão / "Salvar como PDF": só a conversa */
+  @media print {
+    :root { --bg: #fff; --card: #fff; --ink: #000; --muted: #333; --line: #ccc; --user: #eef2ff; }
+    body { background: #fff; }
+    .layout { display: block; max-width: none; padding: 0; }
+    .wrap { height: auto; }
+    #chat { overflow: visible; }
+    aside, .acoes, .docs, .alvo, form, .acoes-resp, .sugs, .gaveta, dialog, .lidos .dica { display: none !important; }
+    .msg { break-inside: avoid; }
+  }
 </style>
 </head>
 <body>
@@ -147,18 +243,33 @@
     </div>
     <div class="acoes">
       <a href="/como-funciona">Como funciona</a>
-      <button id="apresentar" type="button" aria-pressed="false" title="Letras maiores para o projetor">Modo apresentação</button>
       <button id="nova" type="button">Nova conversa</button>
+      <details class="mais" id="mais">
+        <summary aria-label="Mais opções">Mais ▾</summary>
+        <div class="menu" role="menu">
+          <button type="button" role="menuitem" id="m-qr">📱 QR code em tela cheia</button>
+          <button type="button" role="menuitemcheckbox" id="apresentar" aria-checked="false" aria-pressed="false" title="Letras maiores para o projetor">🔍 Modo apresentação</button>
+          <button type="button" role="menuitem" id="m-tema">🌓 Tema: <span id="tema-nome">automático</span></button>
+          <hr>
+          <button type="button" role="menuitem" id="m-md">⬇️ Baixar conversa (.md)</button>
+          <button type="button" role="menuitem" id="m-pdf">🖨️ Imprimir / salvar em PDF</button>
+          <hr>
+          <button type="button" role="menuitem" id="m-guia">❓ Ver o guia rápido</button>
+          <button type="button" role="menuitem" id="m-atalhos" disabled><small>Atalhos: <b>/</b> pergunta · <b>Esc</b> fecha</small></button>
+        </div>
+      </details>
     </div>
   </header>
 
   <section class="docs" aria-label="Seus documentos">
     <div class="docs-top">
-      <b>Seus documentos<small>PDF, Word, PowerPoint, TXT ou MD · você também pode arrastar o arquivo para cá</small></b>
-      <button class="btn-up" id="btn-up" type="button">+ Enviar documento</button>
-      <input type="file" id="arquivo" accept=".pdf,.docx,.pptx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown" hidden>
+      <b>Seus documentos<small>PDF, Word, PowerPoint, TXT ou MD · você também pode arrastar os arquivos para cá</small></b>
+      <button class="docs-toggle" id="docs-toggle" type="button" aria-expanded="true" aria-controls="chips">📄 <span id="docs-cont">Documentos</span> ▾</button>
+      <button class="btn-up" id="btn-up" type="button">+ Enviar documentos</button>
+      <input type="file" id="arquivo" multiple accept=".pdf,.docx,.pptx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown" hidden>
     </div>
     <div class="chips" id="chips"></div>
+    <div class="progresso" id="progresso" hidden><span id="progresso-txt"></span><progress id="progresso-barra" max="100"></progress></div>
     <div class="docs-msg" id="docs-msg" role="status"></div>
     <div class="privacidade">
       <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
@@ -193,7 +304,7 @@ Ainda não tem um arquivo? Teste com os documentos de exemplo que já estão car
 <aside aria-label="Acesso e custos">
   <div class="painel qr">
     <h2>Acesse pelo celular</h2>
-    <img src="/qr.svg" alt="QR code para abrir o Converse com os seus documentos" width="220" height="220">
+    <img src="/qr.svg" id="qr-mini" alt="QR code para abrir o Converse com os seus documentos (clique para ampliar)" width="220" height="220" title="Clique para ampliar">
     <p>Aponte a câmera ou acesse<br><a id="url" href="/">carregando...</a></p>
   </div>
   <div class="painel">
@@ -207,6 +318,34 @@ Ainda não tem um arquivo? Teste com os documentos de exemplo que já estão car
 </aside>
 </div>
 
+<dialog class="dlg-qr" id="dlg-qr" aria-label="QR code em tela cheia">
+  <button class="fechar" type="button" data-fechar aria-label="Fechar">×</button>
+  <img src="/qr.svg" alt="QR code para abrir o assistente" width="620" height="620">
+  <p id="dlg-url">carregando...</p>
+  <small>Aponte a câmera do celular para abrir</small>
+</dialog>
+
+<dialog class="guia" id="dlg-guia" aria-labelledby="guia-titulo">
+  <button class="fechar" type="button" data-fechar aria-label="Fechar">×</button>
+  <h2 id="guia-titulo">Como usar em 3 passos</h2>
+  <small style="color:var(--muted)">Leva menos de um minuto 🙂</small>
+  <ol>
+    <li><b>1</b><span><strong>Envie um documento</strong> — PDF, Word, PowerPoint ou texto. Ou use os exemplos que já estão carregados.</span></li>
+    <li><b>2</b><span><strong>Pergunte o que quiser</strong> sobre ele. Dá para escolher um documento só em “Perguntar sobre”.</span></li>
+    <li><b>3</b><span><strong>Confira a fonte</strong>: cada resposta mostra o trecho e a página. Clique no nome do documento para abrir na página citada.</span></li>
+  </ol>
+  <div class="rodape"><button class="btn" type="button" data-fechar>Começar</button></div>
+</dialog>
+
+<div class="gaveta" id="gaveta" role="dialog" aria-label="Visualizar documento" aria-hidden="true">
+  <div class="gaveta-top">
+    <b id="gaveta-titulo">Documento</b>
+    <a id="gaveta-nova" href="#" target="_blank" rel="noopener">Abrir em nova aba</a>
+    <button type="button" id="gaveta-fechar">Fechar ✕</button>
+  </div>
+  <iframe id="gaveta-frame" title="Documento" src="about:blank"></iframe>
+</div>
+
 <script>
 const chat = document.getElementById('chat');
 const form = document.getElementById('f');
@@ -215,11 +354,11 @@ const btn = document.getElementById('b');
 
 function novaSessao() {
   const id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()).replace(/[^A-Za-z0-9]/g, '');
-  try { sessionStorage.setItem('sessao_id', id); } catch (_) {}
+  try { localStorage.setItem('sessao_id', id); } catch (_) {}
   return id;
 }
 let sessao;
-try { sessao = sessionStorage.getItem('sessao_id'); } catch (_) {}
+try { sessao = localStorage.getItem('sessao_id'); } catch (_) {}
 if (!sessao) sessao = novaSessao();
 
 // Espaço de documentos: continua o mesmo ao clicar em "Nova conversa" e ao recarregar a página.
@@ -284,19 +423,167 @@ function digitar(alvo, texto) {
   }, 16);
 }
 
+// ---------- Histórico da conversa (fica salvo neste navegador) ----------
+const HIST_KEY = 'historico_v1';
+let historico = [];
+try { historico = JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); if (!Array.isArray(historico)) historico = []; } catch (_) { historico = []; }
+function salvarHistorico() {
+  historico = historico.slice(-40);
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(historico)); } catch (_) { /* armazenamento cheio: segue sem salvar */ }
+}
+// Guarda a resposta "enxuta": sem o raciocínio e com trechos curtos, para caber no navegador.
+function enxuta(r) {
+  const copia = Object.assign({}, r);
+  delete copia.passos;
+  copia.trechos = (r.trechos || []).slice(0, 6).map(t => Object.assign({}, t, { texto: (t.texto || '').slice(0, 600) }));
+  return copia;
+}
+
+// ---------- Erros com sugestão de solução ----------
+const DICAS = [
+  [/OCR|escanead|não encontrei texto/i, 'Parece um PDF escaneado (só imagem). Abra o arquivo no Google Drive com “Abrir com → Google Docs”: ele reconhece o texto (OCR). Depois baixe como .docx e envie aqui.'],
+  [/Limite de \d+ documentos/i, 'Remova um documento no × ao lado do nome e envie de novo.'],
+  [/passa de \d+ ?MB/i, 'Comprima o PDF (por exemplo no ilovepdf.com) ou envie só os capítulos que interessam.'],
+  [/Office válido|formato novo|\.doc\b/i, 'Abra no Word ou PowerPoint e use “Salvar como” → .docx ou .pptx.'],
+  [/páginas; o limite|slides; o limite/i, 'Divida o arquivo em partes menores e envie cada uma.'],
+  [/não suportado/i, 'Formatos aceitos: PDF, DOCX, PPTX, TXT e MD.'],
+  [/corrompido|protegido/i, 'Se o PDF tiver senha, tire a proteção (ou use “Imprimir → Salvar como PDF”) e envie de novo.'],
+  [/limite diário/i, 'O limite de gastos da demonstração acabou por hoje. Volte amanhã!'],
+  [/Muit[ao]s .*seguid|Muitos envios|Aguarde/i, 'Espere um minutinho e tente de novo.'],
+  [/contatar o servidor|conexão|interrompida/i, 'Confira a internet (o Wi-Fi às vezes oscila) e tente de novo.'],
+];
+function dicaErro(msg) {
+  const achada = DICAS.find(([re]) => re.test(msg || ''));
+  return achada ? achada[1] : '';
+}
+function detalheErro(dados, status) {
+  return typeof (dados && dados.detail) === 'string' ? dados.detail : 'Erro ' + status;
+}
+
+// ---------- Destaque da frase citada dentro do trecho ----------
+function regexDaFrase(palavras) {
+  const esc = palavras.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return new RegExp(esc.join('[\\s\\S]{0,3}?\\s*'), 'i');
+}
+function intervalosCitados(texto, frases) {
+  const achados = [];
+  for (const f of frases) {
+    for (const pedaco of String(f || '').split(/\.\.\.|…/)) {
+      const palavras = pedaco.replace(/[“”"«»]/g, ' ').split(/\s+/).filter(Boolean);
+      // Tenta a frase inteira; se o modelo resumiu o fim, vai encurtando (mínimo 5 palavras).
+      for (let n = palavras.length; n >= Math.min(5, palavras.length) && n >= 3; n--) {
+        const m = regexDaFrase(palavras.slice(0, n)).exec(texto);
+        if (m) { achados.push([m.index, m.index + m[0].length]); break; }
+      }
+    }
+  }
+  achados.sort((a, b) => a[0] - b[0]);
+  const unidos = [];
+  for (const it of achados) {
+    const ult = unidos[unidos.length - 1];
+    if (ult && it[0] <= ult[1]) ult[1] = Math.max(ult[1], it[1]); else unidos.push(it.slice());
+  }
+  return unidos;
+}
+function paragrafoComDestaque(texto, frases) {
+  const p = el('p');
+  let pos = 0;
+  for (const [ini, fim] of intervalosCitados(texto, frases)) {
+    p.append(document.createTextNode(texto.slice(pos, ini)), el('mark', '', texto.slice(ini, fim)));
+    pos = fim;
+  }
+  p.append(document.createTextNode(texto.slice(pos)));
+  return p;
+}
+
+// ---------- Copiar e avaliar ----------
+function textoParaCopiar(r) {
+  let t = r.resposta;
+  if (r.citacoes && r.citacoes.length) {
+    t += '\n\nFontes:\n' + r.citacoes.map(c => '- ' + c.documento + (c.pagina ? ', p. ' + c.pagina : '') + (c.trecho ? ' — “' + c.trecho + '”' : '')).join('\n');
+  }
+  return t;
+}
+async function copiarTexto(texto) {
+  try { await navigator.clipboard.writeText(texto); return true; } catch (_) {}
+  const ta = el('textarea'); ta.value = texto; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.append(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+  ta.remove(); return ok;
+}
+function botaoDiscreto(texto, titulo) {
+  const b = el('button', 'discreto', texto);
+  b.type = 'button'; b.title = titulo; b.setAttribute('aria-label', titulo);
+  return b;
+}
+function acoesDaResposta(box, r, pergunta) {
+  const acoes = el('div', 'acoes-resp');
+  // Demonstração: a mesma pergunta respondida pelo modelo sozinho, sem os documentos.
+  if (['respondida', 'sem_evidencia'].includes(r.status)) {
+    const bt = el('button', '', 'Comparar: e se fosse sem RAG?');
+    bt.type = 'button';
+    bt.addEventListener('click', () => comparar(bt, pergunta, r));
+    acoes.append(bt);
+  }
+  const copiar = botaoDiscreto('Copiar', 'Copiar a resposta com as fontes');
+  copiar.addEventListener('click', async () => {
+    copiar.textContent = (await copiarTexto(textoParaCopiar(r))) ? 'Copiado ✓' : 'Não deu para copiar';
+    setTimeout(() => { copiar.textContent = 'Copiar'; }, 2000);
+  });
+  const up = botaoDiscreto('👍', 'Resposta útil');
+  const down = botaoDiscreto('👎', 'Resposta ruim');
+  up.setAttribute('aria-pressed', 'false'); down.setAttribute('aria-pressed', 'false');
+  const votar = async (voto, motivo) => {
+    up.disabled = down.disabled = true;
+    (voto === 'positivo' ? up : down).setAttribute('aria-pressed', 'true');
+    const motivos = acoes.querySelector('.motivos');
+    if (motivos) motivos.replaceChildren(document.createTextNode('Obrigado pelo retorno! 🙏'));
+    else acoes.append(el('span', 'motivos', 'Obrigado pelo retorno! 🙏'));
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessao_id: sessao, voto, motivo: motivo || '', pergunta: (pergunta || '').slice(0, 1000), resposta: (r.resposta || '').slice(0, 4000) }),
+      });
+    } catch (_) { /* avaliação é opcional */ }
+  };
+  up.addEventListener('click', () => votar('positivo'));
+  down.addEventListener('click', () => {
+    if (acoes.querySelector('.motivos')) return;
+    const linha = el('div', 'motivos', 'O que deu errado?');
+    for (const m of ['Informação errada', 'Não achou no documento', 'Fonte não confere', 'Resposta confusa', 'Outro']) {
+      const b = el('button', '', m); b.type = 'button';
+      b.addEventListener('click', () => votar('negativo', m));
+      linha.append(b);
+    }
+    acoes.append(linha);
+  });
+  acoes.append(copiar, up, down);
+  box.append(acoes);
+}
+
+const CONFIANCA = {
+  alta: ['alta', 'Confiança alta: a resposta está apoiada em trechos citados dos documentos.'],
+  media: ['média', 'Confiança média: os trechos cobrem a pergunta só em parte. Vale conferir a fonte.'],
+  baixa: ['baixa', 'Confiança baixa: pouca ou nenhuma evidência nos documentos. Não confie sem conferir.'],
+};
+
 function renderResposta(r, opts = {}) {
   const box = el('div', 'msg bot');
   const meta = el('div', 'meta');
   meta.append(el('span', 'tag ' + (r.status === 'respondida' ? 'ok' : 'bad'), r.status.replace('_', ' ')));
-  meta.append(el('span', 'tag', 'confiança ' + r.confianca));
+  const [nomeConf, dicaConf] = CONFIANCA[r.confianca] || [r.confianca, ''];
+  const conf = el('span', 'tag conf ' + r.confianca, 'confiança ' + nomeConf);
+  conf.title = dicaConf; conf.tabIndex = 0; conf.setAttribute('aria-label', dicaConf);
+  meta.append(conf);
   const txt = el('div', 'txt');
   box.append(meta, txt);
   if (opts.digitar) digitar(txt, r.resposta); else txt.textContent = r.resposta;
   const trechos = r.trechos || [];
+  const citacoes = r.citacoes || [];
 
-  if (r.citacoes && r.citacoes.length) {
+  if (citacoes.length) {
     const ul = el('ul', 'cits');
-    for (const c of r.citacoes) {
+    for (const c of citacoes) {
       const li = el('li');
       const fonte = trechos.find(t => t.documento === c.documento && t.arquivo && (!c.pagina || t.pagina === c.pagina))
         || trechos.find(t => t.documento === c.documento && t.arquivo);
@@ -307,26 +594,17 @@ function renderResposta(r, opts = {}) {
     box.append(ul);
   }
   if (r.avisos && r.avisos.length) box.append(el('div', 'avisos', '⚠ ' + r.avisos.join(' ')));
-
-  // Demonstração: a mesma pergunta respondida pelo modelo sozinho, sem os documentos.
-  if (opts.pergunta && ['respondida', 'sem_evidencia'].includes(r.status)) {
-    const acoes = el('div', 'acoes-resp');
-    const bt = el('button', '', 'Comparar: e se fosse sem RAG?');
-    bt.type = 'button';
-    bt.addEventListener('click', () => comparar(bt, opts.pergunta, r));
-    acoes.append(bt);
-    box.append(acoes);
-  }
+  if (opts.pergunta) acoesDaResposta(box, r, opts.pergunta);
 
   // Painel "O que a IA leu": os trechos que a busca entregou ao agente.
-  if (r.trechos && r.trechos.length) {
+  if (trechos.length) {
     const det = el('details', 'lidos');
-    det.open = true;
-    const nCit = r.trechos.filter(t => t.citado).length;
-    det.append(el('summary', '', 'O que a IA leu para responder: ' + r.trechos.length + ' trecho(s)' + (nCit ? ' · ' + nCit + ' citado(s)' : '')));
-    det.append(el('div', 'dica', 'A busca transforma a pergunta em números (embeddings) e traz os trechos mais parecidos. A IA só pode responder com o que está aqui.'));
+    det.open = !opts.restaurado;
+    const nCit = trechos.filter(t => t.citado).length;
+    det.append(el('summary', '', 'O que a IA leu para responder: ' + trechos.length + ' trecho(s)' + (nCit ? ' · ' + nCit + ' citado(s)' : '')));
+    det.append(el('div', 'dica', 'A busca transforma a pergunta em números (embeddings) e traz os trechos mais parecidos. A IA só pode responder com o que está aqui. O que aparece marcado foi citado na resposta.'));
     // Mostra primeiro os trechos usados na resposta; o resto fica em "ver mais".
-    const ordenados = [...r.trechos].sort((x, y) => (y.citado ? 1 : 0) - (x.citado ? 1 : 0));
+    const ordenados = [...trechos].sort((x, y) => (y.citado ? 1 : 0) - (x.citado ? 1 : 0));
     const visiveis = Math.max(3, nCit);
     let mais = null;
     ordenados.forEach((t, i) => {
@@ -345,7 +623,8 @@ function renderResposta(r, opts = {}) {
       } else {
         top.append(el('span', 'selo', t.tipo_busca === 'resumo' ? 'documento inteiro' : 'palavra-chave'));
       }
-      c.append(top, el('p', '', t.texto));
+      const frases = t.citado ? citacoes.filter(cc => cc.documento === t.documento && (!cc.pagina || !t.pagina || cc.pagina === t.pagina)).map(cc => cc.trecho) : [];
+      c.append(top, paragrafoComDestaque(t.texto || '', frases));
       if (i < visiveis) { det.append(c); return; }
       if (!mais) {
         mais = el('details');
@@ -380,6 +659,25 @@ function renderResposta(r, opts = {}) {
     box.append(det);
   }
   chat.append(box);
+  return box;
+}
+
+// Erro (ou resposta interrompida) com dica e botão para tentar de novo.
+function renderErro(msg, pergunta, balaoUsuario) {
+  const box = el('div', 'msg bot');
+  const meta = el('div', 'meta');
+  meta.append(el('span', 'tag bad', 'não respondida'));
+  box.append(meta, el('div', 'txt', msg));
+  const dica = dicaErro(msg);
+  if (dica) box.append(el('div', 'dica-erro', '💡 ' + dica));
+  if (pergunta) {
+    const acoes = el('div', 'acoes-resp erro-acoes');
+    const bt = el('button', '', '↻ Tentar de novo'); bt.type = 'button';
+    bt.addEventListener('click', () => { if (controlador) return; box.remove(); if (balaoUsuario) balaoUsuario.remove(); enviar(pergunta); });
+    acoes.append(bt); box.append(acoes);
+  }
+  chat.append(box);
+  return box;
 }
 
 function descreverPasso(p) {
@@ -399,24 +697,35 @@ function descreverPasso(p) {
   return p.conteudo;
 }
 
+let controlador = null;  // AbortController da pergunta em andamento (botão "Parar")
+function modoEnviando(ligado) {
+  btn.textContent = ligado ? 'Parar' : 'Enviar';
+  btn.classList.toggle('parar', ligado);
+  btn.title = ligado ? 'Interromper a resposta' : '';
+}
+
 async function enviar(texto) {
-  chat.append(el('div', 'msg user', texto));
+  if (controlador) return;
+  const balao = el('div', 'msg user', texto);
+  chat.append(balao);
   const typing = el('div', 'msg bot typing', 'Consultando seus documentos...');
   const aoVivo = el('ul', 'ao-vivo');
   typing.append(aoVivo);
   chat.append(typing);
   chat.scrollTop = chat.scrollHeight;
-  btn.disabled = true;
+  controlador = new AbortController();
+  modoEnviando(true);
   let final = null;
   try {
     const resp = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pergunta: texto, sessao_id: sessao, espaco_id: espaco, documento: alvoAtual() }),
+      signal: controlador.signal,
     });
     if (!resp.ok || !resp.body) {
       const dados = await resp.json().catch(() => ({}));
-      throw new Error(dados.detail || 'Erro ' + resp.status);
+      throw new Error(detalheErro(dados, resp.status));
     }
     // Server-Sent Events: cada evento termina com uma linha em branco.
     const leitor = resp.body.getReader();
@@ -443,12 +752,17 @@ async function enviar(texto) {
     typing.remove();
     if (!final) throw new Error('A conexão foi interrompida antes da resposta. Tente de novo.');
     renderResposta(final, { pergunta: texto, digitar: true });
+    historico.push({ tipo: 'user', texto }, { tipo: 'bot', pergunta: texto, r: enxuta(final) });
+    salvarHistorico();
   } catch (e) {
     typing.remove();
-    const msg = e instanceof TypeError ? 'Não foi possível contatar o servidor.' : e.message;
-    renderResposta({ status: 'erro', confianca: 'baixa', resposta: msg, citacoes: [] });
+    let msg = e.message;
+    if (e.name === 'AbortError') msg = 'Você interrompeu a resposta.';
+    else if (e instanceof TypeError) msg = 'Não foi possível contatar o servidor.';
+    renderErro(msg, texto, balao);
   } finally {
-    btn.disabled = false;
+    controlador = null;
+    modoEnviando(false);
     chat.scrollTop = chat.scrollHeight;
     q.focus();
     atualizarUso();
@@ -465,7 +779,7 @@ async function comparar(bt, pergunta, r) {
       body: JSON.stringify({ pergunta, sessao_id: sessao }),
     });
     const dados = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(dados.detail || 'Erro ' + resp.status);
+    if (!resp.ok) throw new Error(detalheErro(dados, resp.status));
     const grade = el('div', 'comparacao');
     const sem = el('div', 'sem');
     sem.append(el('h3', '', 'Sem RAG (só o modelo)'), el('p', '', dados.resposta), el('small', '', 'Sem fontes: não dá para saber de onde veio nem se é verdade. Custo: ' + usd(dados.custo.custo_usd)));
@@ -478,15 +792,17 @@ async function comparar(bt, pergunta, r) {
     atualizarUso();
   } catch (e) {
     bt.disabled = false;
-    bt.textContent = 'Comparar: e se fosse sem RAG?';
-    alert(e.message);
+    bt.textContent = 'Não deu para comparar (' + (e instanceof TypeError ? 'sem conexão' : e.message) + '). Tentar de novo?';
   }
 }
 
+// "Parar" no clique do botão: o submit seria barrado pela validação com a caixa vazia.
+btn.addEventListener('click', (e) => { if (controlador) { e.preventDefault(); controlador.abort(); } });
 form.addEventListener('submit', (e) => {
   e.preventDefault();
+  if (controlador) { controlador.abort(); return; }
   const t = q.value.trim();
-  if (!t || btn.disabled) return;
+  if (!t) return;
   q.value = '';
   enviar(t);
 });
@@ -508,18 +824,9 @@ function atualizarUso() {
 fetch('/api/info').then(r => r.json()).then(i => {
   const a = document.getElementById('url');
   a.href = i.url; a.textContent = i.url.replace(/^https?:\/\//, '');
+  document.getElementById('dlg-url').textContent = i.url.replace(/^https?:\/\//, '');
   pintarUso(i.orcamento);
 }).catch(() => {});
-
-// Modo apresentação: tudo maior para o projetor (fica salvo neste navegador).
-const btApresentar = document.getElementById('apresentar');
-function aplicarApresentacao(ligado) {
-  document.body.classList.toggle('apresentacao', ligado);
-  btApresentar.setAttribute('aria-pressed', String(ligado));
-  try { localStorage.setItem('modo_apresentacao', ligado ? '1' : '0'); } catch (_) {}
-}
-btApresentar.addEventListener('click', () => aplicarApresentacao(!document.body.classList.contains('apresentacao')));
-try { if (localStorage.getItem('modo_apresentacao') === '1') aplicarApresentacao(true); } catch (_) {}
 
 // ---------------- Documentos ----------------
 const chips = document.getElementById('chips');
@@ -529,9 +836,21 @@ const inputArq = document.getElementById('arquivo');
 let limites = { extensoes: ['.md', '.pdf', '.txt'], max_mb: 15 };
 
 function avisoDocs(texto, erro) {
-  docsMsg.textContent = texto || '';
+  docsMsg.replaceChildren(document.createTextNode(texto || ''));
   docsMsg.className = 'docs-msg' + (erro ? ' erro' : '');
+  const dica = erro ? dicaErro(texto) : '';
+  if (dica) docsMsg.append(el('div', 'dica-erro', '💡 ' + dica));
 }
+
+// Celular: a lista de documentos recolhe para sobrar espaço para a conversa.
+const docsSec = document.querySelector('.docs');
+const docsToggle = document.getElementById('docs-toggle');
+function recolherDocs(recolher) {
+  docsSec.classList.toggle('recolhido', recolher);
+  docsToggle.setAttribute('aria-expanded', String(!recolher));
+}
+docsToggle.addEventListener('click', () => recolherDocs(!docsSec.classList.contains('recolhido')));
+if (window.matchMedia && matchMedia('(max-width: 560px)').matches) recolherDocs(true);
 
 // Seletor "Perguntar sobre": restringe a busca a um documento.
 const seletor = document.getElementById('alvo');
@@ -573,13 +892,15 @@ function pintarDocs(lista) {
     chips.append(c);
   }
   if (!lista.length) chips.append(el('span', 'docs-msg', 'Nenhum documento ainda. Envie o primeiro!'));
+  document.getElementById('docs-cont').textContent = 'Documentos (' + lista.length + ')';
+  docsToggle.title = meus.length + ' seu(s) + ' + exemplos.length + ' de exemplo';
 }
 
 async function chamarDocs(metodo, corpo, params) {
   const url = '/api/documentos' + (params ? '?' + new URLSearchParams(params) : '');
   const resp = await fetch(url, { method: metodo, body: corpo });
   const dados = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(dados.detail || ('Erro ' + resp.status));
+  if (!resp.ok) throw new Error(detalheErro(dados, resp.status));
   return dados;
 }
 
@@ -588,30 +909,75 @@ async function carregarDocs() {
   catch (e) { avisoDocs('Não consegui carregar a lista de documentos: ' + e.message, true); }
 }
 
-async function enviarArquivo(arq) {
-  if (!arq) return;
-  const ext = '.' + (arq.name.split('.').pop() || '').toLowerCase();
-  if (!limites.extensoes.includes(ext)) return avisoDocs('Formato não suportado. Envie PDF, DOCX, PPTX, TXT ou MD.', true);
-  if (arq.size > limites.max_mb * 1024 * 1024) return avisoDocs('O arquivo passa de ' + limites.max_mb + ' MB.', true);
-  const fd = new FormData();
-  fd.append('espaco_id', espaco);
-  fd.append('arquivo', arq);
+async function enviarArquivo(arq) { return enviarArquivos(arq ? [arq] : []); }
+
+// Upload com barra de progresso real (XHR mostra quanto já subiu; o fetch não mostra).
+function postarComProgresso(fd, aoProgredir) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/documentos');
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) aoProgredir(e.loaded / e.total); };
+    xhr.upload.onload = () => aoProgredir(1);
+    xhr.onload = () => {
+      let dados = {};
+      try { dados = JSON.parse(xhr.responseText || '{}'); } catch (_) {}
+      if (xhr.status >= 200 && xhr.status < 300) resolve(dados); else reject(new Error(detalheErro(dados, xhr.status)));
+    };
+    xhr.onerror = () => reject(new Error('Não foi possível contatar o servidor.'));
+    xhr.send(fd);
+  });
+}
+const progresso = document.getElementById('progresso');
+const progressoTxt = document.getElementById('progresso-txt');
+const progressoBarra = document.getElementById('progresso-barra');
+function mostrarProgresso(texto, fracao) {
+  progresso.hidden = false;
+  progressoTxt.textContent = texto;
+  if (fracao === null) progressoBarra.removeAttribute('value'); else progressoBarra.value = Math.round(fracao * 100);
+}
+
+async function enviarArquivos(lista) {
+  const arquivos = [...(lista || [])];
+  if (!arquivos.length) return;
   btnUp.disabled = true;
-  const docsAntes = docsAtuais.filter(d => !d.exemplo).map(d => d.arquivo);
-  avisoDocs('Lendo “' + arq.name + '” e gerando os embeddings... isso leva alguns segundos.');
-  try {
-    const dados = await chamarDocs('POST', fd);
-    pintarDocs(dados.documentos);
-    avisoDocs(dados.mensagem);
-    const antes = new Set(docsAntes);
-    const novo = dados.documentos.find(d => !d.exemplo && !antes.has(d.arquivo)) || dados.documentos.find(d => !d.exemplo);
-    if (novo) sugerirPerguntas(novo);
-  } catch (e) {
-    avisoDocs(e.message, true);
-  } finally {
-    btnUp.disabled = false;
-    inputArq.value = '';
+  avisoDocs('');
+  const erros = [];
+  let ok = 0, ultimoNovo = null, ultimaMsg = '';
+  for (const [i, arq] of arquivos.entries()) {
+    const prefixo = arquivos.length > 1 ? '(' + (i + 1) + ' de ' + arquivos.length + ') ' : '';
+    const ext = '.' + (arq.name.split('.').pop() || '').toLowerCase();
+    if (!limites.extensoes.includes(ext)) { erros.push([arq.name, 'Formato ' + ext + ' não suportado. Envie PDF, DOCX, PPTX, TXT ou MD.']); continue; }
+    if (arq.size > limites.max_mb * 1024 * 1024) { erros.push([arq.name, 'O arquivo passa de ' + limites.max_mb + ' MB.']); continue; }
+    const fd = new FormData();
+    fd.append('espaco_id', espaco);
+    fd.append('arquivo', arq);
+    const antes = new Set(docsAtuais.filter(d => !d.exemplo).map(d => d.arquivo));
+    mostrarProgresso(prefixo + 'Enviando “' + arq.name + '”... 0%', 0);
+    try {
+      const dados = await postarComProgresso(fd, (f) => {
+        if (f < 1) mostrarProgresso(prefixo + 'Enviando “' + arq.name + '”... ' + Math.round(f * 100) + '%', f);
+        else mostrarProgresso(prefixo + 'Lendo “' + arq.name + '” e gerando os embeddings... (alguns segundos)', null);
+      });
+      ok += 1;
+      ultimaMsg = dados.mensagem;
+      pintarDocs(dados.documentos);
+      ultimoNovo = dados.documentos.find(d => !d.exemplo && !antes.has(d.arquivo)) || ultimoNovo;
+    } catch (e) {
+      erros.push([arq.name, e.message]);
+      if (/Limite de \d+ documentos|limite diário/i.test(e.message)) break;  // os próximos falhariam igual
+    }
   }
+  progresso.hidden = true;
+  btnUp.disabled = false;
+  inputArq.value = '';
+  if (erros.length) {
+    const [nome, msg] = erros[0];
+    const resumo = arquivos.length > 1 ? ok + ' de ' + arquivos.length + ' enviado(s). ' : '';
+    avisoDocs(resumo + '“' + nome + '”: ' + msg + (erros.length > 1 ? ' (+' + (erros.length - 1) + ' com erro)' : ''), true);
+  } else {
+    avisoDocs(arquivos.length > 1 ? ok + ' documentos enviados. Já pode perguntar!' : ultimaMsg);
+  }
+  if (ultimoNovo) sugerirPerguntas(ultimoNovo);
 }
 
 // Depois do upload: 3 perguntas sobre o documento, para quem não sabe por onde começar.
@@ -630,7 +996,7 @@ async function sugerirPerguntas(doc) {
     const sugs = el('div', 'sugs'); sugs.style.marginTop = '10px';
     for (const p of dados.perguntas) {
       const b = el('button', '', p); b.type = 'button';
-      b.addEventListener('click', () => { if (!btn.disabled) enviar(p); });
+      b.addEventListener('click', () => enviar(p));
       sugs.append(b);
     }
     box.append(sugs);
@@ -650,18 +1016,146 @@ async function removerDoc(d) {
 }
 
 btnUp.addEventListener('click', () => inputArq.click());
-inputArq.addEventListener('change', () => enviarArquivo(inputArq.files[0]));
+inputArq.addEventListener('change', () => enviarArquivos(inputArq.files));
 const areaDrop = document.querySelector('.wrap');
 ['dragenter', 'dragover'].forEach(ev => areaDrop.addEventListener(ev, (e) => { e.preventDefault(); areaDrop.classList.add('arrastando'); }));
 ['dragleave', 'drop'].forEach(ev => areaDrop.addEventListener(ev, (e) => { e.preventDefault(); areaDrop.classList.remove('arrastando'); }));
-areaDrop.addEventListener('drop', (e) => enviarArquivo(e.dataTransfer && e.dataTransfer.files[0]));
+areaDrop.addEventListener('drop', (e) => { if (!btnUp.disabled) enviarArquivos(e.dataTransfer && e.dataTransfer.files); });
 fetch('/api/info').then(r => r.json()).then(i => { if (i.upload) limites = i.upload; }).catch(() => {});
 carregarDocs();
 
+// Modo apresentação: tudo maior para o projetor (fica salvo neste navegador).
+const btApresentar = document.getElementById('apresentar');
+function aplicarApresentacao(ligado) {
+  document.body.classList.toggle('apresentacao', ligado);
+  btApresentar.setAttribute('aria-pressed', String(ligado));
+  btApresentar.setAttribute('aria-checked', String(ligado));
+  btApresentar.textContent = '🔍 Modo apresentação' + (ligado ? ' ✓' : '');
+  try { localStorage.setItem('modo_apresentacao', ligado ? '1' : '0'); } catch (_) {}
+}
+btApresentar.addEventListener('click', () => aplicarApresentacao(!document.body.classList.contains('apresentacao')));
+try { if (localStorage.getItem('modo_apresentacao') === '1') aplicarApresentacao(true); } catch (_) {}
+
+// Menu "Mais": fecha ao escolher uma opção ou ao clicar fora.
+const menuMais = document.getElementById('mais');
+menuMais.querySelector('.menu').addEventListener('click', (e) => { if (e.target.closest('button')) menuMais.open = false; });
+document.addEventListener('click', (e) => { if (menuMais.open && !menuMais.contains(e.target)) menuMais.open = false; });
+
+// Tema: automático → claro → escuro.
+const TEMAS = ['auto', 'claro', 'escuro'];
+const NOMES_TEMA = { auto: 'automático', claro: 'claro', escuro: 'escuro' };
+function aplicarTema(t) {
+  if (t === 'auto') delete document.documentElement.dataset.tema; else document.documentElement.dataset.tema = t;
+  document.getElementById('tema-nome').textContent = NOMES_TEMA[t];
+  try { localStorage.setItem('tema', t); } catch (_) {}
+}
+document.getElementById('m-tema').addEventListener('click', () => {
+  const atual = document.documentElement.dataset.tema || 'auto';
+  aplicarTema(TEMAS[(TEMAS.indexOf(atual) + 1) % TEMAS.length]);
+});
+aplicarTema(document.documentElement.dataset.tema || 'auto');
+
+// Caixas de diálogo: fechar no ×, no botão e clicando fora.
+document.querySelectorAll('dialog').forEach(d => {
+  d.addEventListener('click', (e) => { if (e.target === d || e.target.closest('[data-fechar]')) d.close(); });
+});
+const dlgQr = document.getElementById('dlg-qr');
+function abrirQr() { if (!dlgQr.open) dlgQr.showModal(); }
+document.getElementById('m-qr').addEventListener('click', abrirQr);
+document.getElementById('qr-mini').addEventListener('click', abrirQr);
+
+// Guia rápido de 3 passos: aparece só na primeira visita.
+const dlgGuia = document.getElementById('dlg-guia');
+dlgGuia.addEventListener('close', () => { try { localStorage.setItem('guia_visto', '1'); } catch (_) {} q.focus(); });
+document.getElementById('m-guia').addEventListener('click', () => dlgGuia.showModal());
+let guiaVisto = false;
+try { guiaVisto = localStorage.getItem('guia_visto') === '1'; } catch (_) { guiaVisto = true; }
+if (!guiaVisto && !historico.length) dlgGuia.showModal();
+
+// Visualizador: no computador, o PDF abre numa gaveta ao lado da conversa, já na página citada.
+const gaveta = document.getElementById('gaveta');
+const gavetaFrame = document.getElementById('gaveta-frame');
+function abrirVisor(href, titulo) {
+  document.getElementById('gaveta-titulo').textContent = titulo;
+  document.getElementById('gaveta-nova').href = href;
+  gavetaFrame.src = 'about:blank';
+  setTimeout(() => { gavetaFrame.src = href; }, 30);  // recarrega para ir à página certa
+  gaveta.classList.add('aberta');
+  gaveta.setAttribute('aria-hidden', 'false');
+  document.getElementById('gaveta-fechar').focus();
+}
+function fecharVisor() {
+  if (!gaveta.classList.contains('aberta')) return;
+  gaveta.classList.remove('aberta');
+  gaveta.setAttribute('aria-hidden', 'true');
+  setTimeout(() => { gavetaFrame.src = 'about:blank'; }, 250);
+}
+document.getElementById('gaveta-fechar').addEventListener('click', fecharVisor);
+chat.addEventListener('click', (e) => {
+  const a = e.target.closest('a[href^="/api/documentos/arquivo"]');
+  if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;
+  const arq = new URL(a.href, location.href).searchParams.get('arquivo') || '';
+  if (!arq.toLowerCase().endsWith('.pdf') || !matchMedia('(min-width: 901px)').matches) return;  // celular: nova aba
+  e.preventDefault();
+  abrirVisor(a.getAttribute('href'), a.textContent);
+});
+
+// Atalhos: "/" vai para a pergunta; Esc fecha menu e visualizador.
+document.addEventListener('keydown', (e) => {
+  const digitando = e.target.closest && e.target.closest('input, textarea, select, [contenteditable]');
+  if (e.key === '/' && !digitando && !document.querySelector('dialog[open]')) { e.preventDefault(); q.focus(); }
+  if (e.key === 'Escape') { menuMais.open = false; fecharVisor(); }
+});
+
+// Exportar: Markdown (a partir do histórico) e impressão / PDF.
+function conversaMarkdown() {
+  const linhas = ['# Conversa com os seus documentos', '', '_Exportada em ' + new Date().toLocaleString('pt-BR') + '_', ''];
+  for (const it of historico) {
+    if (it.tipo === 'user') { linhas.push('## ' + it.texto, ''); continue; }
+    const r = it.r;
+    linhas.push(r.resposta, '');
+    if (r.citacoes && r.citacoes.length) {
+      linhas.push('**Fontes:**');
+      for (const c of r.citacoes) linhas.push('- ' + c.documento + (c.pagina ? ', p. ' + c.pagina : '') + (c.trecho ? ' — “' + c.trecho + '”' : ''));
+      linhas.push('');
+    }
+    linhas.push('_Confiança: ' + ((CONFIANCA[r.confianca] || [r.confianca])[0]) + (r.custo ? ' · custo ' + usd(r.custo.custo_usd) : '') + '_', '', '---', '');
+  }
+  return linhas.join('\n');
+}
+document.getElementById('m-md').addEventListener('click', () => {
+  if (!historico.length) { avisoDocs('Ainda não há perguntas para exportar.'); return; }
+  const blob = new Blob([conversaMarkdown()], { type: 'text/markdown;charset=utf-8' });
+  const a = el('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'conversa-' + new Date().toISOString().slice(0, 10) + '.md';
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+document.getElementById('m-pdf').addEventListener('click', () => window.print());
+let fechadosAntesDeImprimir = [];
+window.addEventListener('beforeprint', () => {
+  fechadosAntesDeImprimir = [...chat.querySelectorAll('details:not([open])')];
+  fechadosAntesDeImprimir.forEach(d => { d.open = true; });
+});
+window.addEventListener('afterprint', () => { fechadosAntesDeImprimir.forEach(d => { d.open = false; }); });
+
+// Restaura a conversa salva neste navegador.
+if (historico.length) {
+  chat.append(el('div', 'restaurada', 'Conversa anterior · ' + historico.filter(i => i.tipo === 'user').length + ' pergunta(s)'));
+  for (const it of historico) {
+    if (it.tipo === 'user') chat.append(el('div', 'msg user', it.texto));
+    else if (it.r) renderResposta(it.r, { pergunta: it.pergunta, restaurado: true });
+  }
+  chat.scrollTop = chat.scrollHeight;
+}
+
 document.getElementById('nova').addEventListener('click', () => {
+  if (controlador) controlador.abort();
   sessao = novaSessao();
+  historico = []; salvarHistorico();
   sessaoCusto.usd = 0; sessaoCusto.brl = 0; sessaoCusto.n = 0; pintarTotal();
-  chat.querySelectorAll('.msg').forEach((m, i) => { if (i > 0) m.remove(); });
+  chat.querySelectorAll('.msg, .restaurada').forEach((m, i) => { if (i > 0) m.remove(); });
+  q.focus();
 });
 </script>
 </body>
