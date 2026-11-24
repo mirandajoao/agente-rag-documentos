@@ -51,18 +51,6 @@ def _vectorstore() -> Chroma:
     return abrir_vectorstore()
 
 
-def _espacos_visiveis(espaco: str) -> list[str]:
-    espacos = [espaco] if espaco else []
-    if settings.incluir_exemplos or not espacos:
-        espacos.append(ESPACO_EXEMPLOS)
-    return espacos
-
-
-def _filtro(espaco: str) -> dict:
-    espacos = _espacos_visiveis(espaco)
-    return {"espaco": espacos[0]} if len(espacos) == 1 else {"espaco": {"$in": espacos}}
-
-
 def _tokenizar(texto: str) -> list[str]:
     texto = unicodedata.normalize("NFKD", texto.lower())
     texto = "".join(c for c in texto if not unicodedata.combining(c))
@@ -71,8 +59,8 @@ def _tokenizar(texto: str) -> list[str]:
 
 @lru_cache(maxsize=64)
 def _bm25(espaco: str, _versao_base: int) -> BM25Retriever | None:
-    """Índice lexical BM25 em memória com os trechos visíveis para um espaço."""
-    dados = _vectorstore()._collection.get(where=_filtro(espaco), include=["documents", "metadatas"])
+    """Índice lexical BM25 em memória com os trechos de um espaço (do usuário ou de exemplos)."""
+    dados = _vectorstore()._collection.get(where={"espaco": espaco}, include=["documents", "metadatas"])
     docs = [
         Document(page_content=t, metadata=m or {}, id=i)
         for t, m, i in zip(dados["documents"], dados["metadatas"], dados["ids"])
@@ -84,21 +72,39 @@ def _bm25(espaco: str, _versao_base: int) -> BM25Retriever | None:
     return retriever
 
 
+def _busca_vetorial(consulta: str, filtro: dict, k: int) -> list[tuple[Document, str]]:
+    if k <= 0:
+        return []
+    vetoriais = _vectorstore().similarity_search_with_score(consulta, k=k, filter=filtro)
+    return [(d, f"semântica {round(1 - dist, 3)}") for d, dist in vetoriais if dist <= settings.max_distance]
+
+
 def busca_hibrida(consulta: str, espaco: str) -> list[tuple[Document, str]]:
     """Busca vetorial (semântica) + BM25 (lexical), sem duplicatas.
+
+    Os documentos ENVIADOS PELO USUÁRIO têm prioridade: são buscados primeiro,
+    com top_k completo, e os de exemplo só completam com poucos trechos. Sem
+    isso, uma base de exemplo grande (ex.: um PPC de 100 páginas) "abafa" um
+    documento pequeno enviado pelo usuário.
 
     A busca vetorial decide SE há evidência (limiar de distância); a lexical só
     complementa com trechos que contêm os termos exatos (nomes, siglas, números),
     que embeddings às vezes deixam escapar.
     """
-    vetoriais = _vectorstore().similarity_search_with_score(consulta, k=settings.top_k, filter=_filtro(espaco))
-    relevantes = [(d, f"semântica {round(1 - dist, 3)}") for d, dist in vetoriais if dist <= settings.max_distance]
+    proprios = _busca_vetorial(consulta, {"espaco": espaco}, settings.top_k) if espaco else []
+    k_exemplos = 0
+    if settings.incluir_exemplos or not espaco:
+        k_exemplos = settings.top_k if not proprios else max(1, settings.top_k // 2)
+    exemplos = _busca_vetorial(consulta, {"espaco": ESPACO_EXEMPLOS}, k_exemplos)
+    relevantes = proprios + exemplos
     if not relevantes:
         return []
 
+    # BM25 no mesmo lugar onde a evidência principal foi encontrada.
+    espaco_lexical = espaco if proprios else ESPACO_EXEMPLOS
     vistos = {(d.metadata.get("espaco"), d.metadata.get("arquivo"), d.metadata.get("start_index")) for d, _ in relevantes}
     try:
-        lexical = _bm25(espaco, _versao["n"])
+        lexical = _bm25(espaco_lexical, _versao["n"])
         for d in lexical.invoke(consulta) if lexical else []:
             chave = (d.metadata.get("espaco"), d.metadata.get("arquivo"), d.metadata.get("start_index"))
             if chave not in vistos:
