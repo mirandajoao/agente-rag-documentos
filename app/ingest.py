@@ -503,6 +503,29 @@ def trechos_do_documento(espaco: str, arquivo: str) -> list[Document]:
     return sorted(docs, key=lambda d: int(d.metadata.get("start_index") or 0))
 
 
+RE_CONTINUACAO = re.compile(r"^\(continuação do Art\. \d+\) ")
+RE_SLIDE_MARCA = re.compile(r"(?m)^# Slide (\d+)\n")
+
+
+def paginas_do_documento(espaco: str, arquivo: str) -> list[tuple[int, str]]:
+    """Texto de cada página (ou slide) de um documento indexado, sem repetir a sobreposição entre trechos."""
+    paginas: dict[int, list[str]] = {}
+    fim_anterior = -1
+    for t in trechos_do_documento(espaco, arquivo):
+        texto = RE_CONTINUACAO.sub("", t.page_content)
+        inicio = int(t.metadata.get("start_index") or 0)
+        if 0 <= inicio < fim_anterior:  # corta o pedaço repetido do trecho anterior
+            texto = texto[fim_anterior - inicio :]
+        fim_anterior = max(fim_anterior, inicio + len(RE_CONTINUACAO.sub("", t.page_content)))
+        pagina = int(t.metadata.get("pagina") or 1)
+        pedacos = RE_SLIDE_MARCA.split(texto)
+        if pedacos[0].strip():
+            paginas.setdefault(pagina, []).append(pedacos[0])
+        for numero, conteudo in zip(pedacos[1::2], pedacos[2::2]):
+            paginas.setdefault(int(numero), []).append(conteudo)
+    return [(p, "".join(partes).strip()) for p, partes in sorted(paginas.items())]
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Indexa os documentos de exemplo no ChromaDB.")

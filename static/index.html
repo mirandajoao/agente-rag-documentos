@@ -558,19 +558,20 @@ function atualizarInicio() {
   q.placeholder = conversando ? 'Continue a conversa: a IA lembra das perguntas anteriores...' : 'Pergunte algo sobre os seus documentos...';
 }
 
-// Link para abrir o arquivo original (PDFs abrem direto na página citada).
-function linkArquivo(t, pagina) {
+// Link para o visualizador: abre o documento na página citada, com o trecho destacado.
+function linkArquivo(t, pagina, trecho) {
   if (!t || !t.arquivo) return null;
   const params = new URLSearchParams({ arquivo: t.arquivo });
   if (t.origem === 'exemplo') params.set('exemplo', 'true'); else params.set('espaco_id', espaco);
-  const pdf = t.arquivo.toLowerCase().endsWith('.pdf');
-  return '/api/documentos/arquivo?' + params + (pdf && pagina ? '#page=' + pagina : '');
+  if (pagina) params.set('pagina', pagina);
+  if (trecho) params.set('trecho', String(trecho).replace(/\s+/g, ' ').trim().slice(0, 300));
+  return '/ver?' + params;
 }
 function rotuloComLink(texto, href) {
   if (!href) return el('b', '', texto);
   const a = el('a', '', texto);
   a.href = href; a.target = '_blank'; a.rel = 'noopener';
-  a.title = 'Abrir o documento' + (href.includes('#page=') ? ' nesta página' : '');
+  a.title = 'Abrir o documento' + (href.includes('pagina=') ? ' nesta página, com o trecho destacado' : '');
   const b = el('b'); b.append(a); return b;
 }
 
@@ -740,10 +741,10 @@ function renderResposta(r, opts = {}) {
     for (const c of citacoes) {
       const fonte = trechos.find(t => t.documento === c.documento && t.arquivo && (!c.pagina || t.pagina === c.pagina))
         || trechos.find(t => t.documento === c.documento && t.arquivo);
-      const href = linkArquivo(fonte, c.pagina);
+      const href = linkArquivo(fonte, c.pagina, c.trecho);
       const chip = el(href ? 'a' : 'span', 'fonte');
       if (href) { chip.href = href; chip.target = '_blank'; chip.rel = 'noopener'; }
-      chip.title = (c.trecho ? '“' + c.trecho + '”\n' : '') + (href ? 'Clique para abrir o documento' + (c.pagina ? ' nesta página' : '') : '');
+      chip.title = (c.trecho ? '“' + c.trecho + '”\n' : '') + (href ? 'Clique para abrir o documento' + (c.pagina ? ' nesta página, com o trecho destacado' : '') : '');
       chip.append(el('span', '', c.documento + (c.pagina ? ', p. ' + c.pagina : '')));
       linha.append(chip);
     }
@@ -766,7 +767,8 @@ function renderResposta(r, opts = {}) {
     ordenados.forEach((t, i) => {
       const c = el('div', 'trecho' + (t.citado ? ' citado' : ''));
       const top = el('div', 'trecho-top');
-      top.append(rotuloComLink(t.documento + (t.pagina ? ', p. ' + t.pagina : ''), linkArquivo(t, t.pagina)));
+      const usados = t.citado ? citacoes.filter(cc => cc.documento === t.documento && (!cc.pagina || !t.pagina || cc.pagina === t.pagina)).map(cc => cc.trecho) : [];
+      top.append(rotuloComLink(t.documento + (t.pagina ? ', p. ' + t.pagina : ''), linkArquivo(t, t.pagina, usados[0] || (t.texto || '').replace(/^\(continuação do Art\. \d+\) /, '').slice(0, 200))));
       top.append(el('span', 'selo', t.origem === 'exemplo' ? 'exemplo' : 'seu documento'));
       if (t.citado) top.append(el('span', 'selo cit', 'usado na resposta'));
       if (t.relevancia !== null && t.relevancia !== undefined) {
@@ -1546,10 +1548,9 @@ function fecharVisor() {
 }
 document.getElementById('gaveta-fechar').addEventListener('click', fecharVisor);
 chat.addEventListener('click', (e) => {
-  const a = e.target.closest('a[href^="/api/documentos/arquivo"]');
+  const a = e.target.closest('a[href^="/ver?"]');
   if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;
-  const arq = new URL(a.href, location.href).searchParams.get('arquivo') || '';
-  if (!arq.toLowerCase().endsWith('.pdf') || !matchMedia('(min-width: 901px)').matches) return;  // celular: nova aba
+  if (!matchMedia('(min-width: 901px)').matches) return;  // celular: nova aba
   e.preventDefault();
   abrirVisor(a.getAttribute('href'), a.textContent);
 });

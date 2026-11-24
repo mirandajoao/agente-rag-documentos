@@ -34,6 +34,7 @@ from app.ingest import (
     documentos_do_espaco,
     indexar_arquivo_detalhado,
     indice_existe,
+    paginas_do_documento,
     remover_documentos,
     titulo_amigavel,
 )
@@ -288,6 +289,53 @@ def abrir_documento(espaco_id: str = Query(""), arquivo: str = Query(...), exemp
         media_type=TIPOS_ARQUIVO[caminho.suffix.lower()],
         headers={"Content-Disposition": f'inline; filename="{nome}"', "Cache-Control": "private, max-age=300"},
     )
+
+
+@app.get("/api/documentos/pagina")
+def pagina_do_documento(
+    arquivo: str = Query(...), pagina: int = Query(1, ge=1, le=100000), espaco_id: str = Query(""), exemplo: bool = Query(False)
+):
+    """Texto de uma página (ou slide) como foi indexado, para o visualizador destacar o trecho citado."""
+    nome = _nome_seguro(arquivo)
+    espaco = ESPACO_EXEMPLOS if exemplo else _validar_espaco(espaco_id)
+    paginas = paginas_do_documento(espaco, nome)
+    if not paginas:
+        raise HTTPException(404, "Documento não encontrado. Ele pode ter sido removido.")
+    numeros = [p for p, _ in paginas]
+    alvo = pagina if pagina in numeros else min(numeros, key=lambda n: abs(n - pagina))
+    texto = dict(paginas)[alvo]
+    titulo = next((d["documento"] for d in documentos_do_espaco(espaco, incluir_exemplos=False) if d["arquivo"] == nome), nome)
+    return {
+        "documento": titulo,
+        "arquivo": nome,
+        "pagina": alvo,
+        "paginas": numeros,
+        "texto": texto,
+        "pdf": nome.lower().endswith(".pdf"),
+        "slides": nome.lower().endswith(".pptx"),
+    }
+
+
+@app.get("/ver", include_in_schema=False)
+def visualizador():
+    return FileResponse(STATIC / "ver.html", headers={"Cache-Control": "no-cache"})
+
+
+VENDOR = (STATIC / "vendor").resolve()
+TIPOS_VENDOR = {".mjs": "text/javascript", ".js": "text/javascript", ".bcmap": "application/octet-stream",
+                ".pfb": "application/octet-stream", ".ttf": "font/ttf", ".txt": "text/plain"}
+
+
+@app.get("/vendor/{caminho:path}", include_in_schema=False)
+def vendor(caminho: str):
+    """Bibliotecas de terceiros servidas pelo próprio app (sem depender de CDN no laboratório)."""
+    alvo = (VENDOR / caminho).resolve()
+    if VENDOR not in alvo.parents or not alvo.is_file():
+        raise HTTPException(404)
+    tipo = TIPOS_VENDOR.get(alvo.suffix.lower()) or ("text/plain" if alvo.name == "LICENSE" else None)
+    if not tipo:
+        raise HTTPException(404)
+    return FileResponse(alvo, media_type=tipo, headers={"Cache-Control": "public, max-age=604800"})
 
 
 @app.get("/api/documentos", response_model=DocumentosOut)
