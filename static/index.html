@@ -77,14 +77,31 @@
   .alvo select { flex: 1 1 220px; min-width: 0; max-width: 100%; min-height: 36px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-size: 13px; }
   .alvo select.ativo { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
   .acoes { display: flex; gap: 8px; align-items: center; }
-  .acoes button { white-space: nowrap; }
-  .acoes a { color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; text-decoration: none; white-space: nowrap; }
-  .acoes a:hover { color: var(--brand); border-color: var(--brand); }
+  /* Todos os itens do topo com a mesma altura e alinhados pelo centro */
+  .acoes > a, .acoes > button:not(.tema-switch), .mais > summary {
+    box-sizing: border-box; height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--muted);
+    font: inherit; font-size: 13px; line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer;
+  }
+  .acoes > a:hover, .acoes > button:not(.tema-switch):hover { color: var(--brand); border-color: var(--brand); }
+  .mais { display: flex; margin: 0; font-size: 13px; }
+  /* Interruptor de tema no estilo do iPhone */
+  .tema-switch { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 2px; border: 0; background: none; color: var(--muted); cursor: pointer; }
+  .tema-switch svg { flex: none; }
+  .tema-switch .trilho { position: relative; width: 46px; height: 28px; border-radius: 999px; background: #d1d5db; transition: background .2s ease; }
+  .tema-switch .bolinha { position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.25); transition: transform .2s ease; }
+  .tema-switch[aria-checked="true"] .trilho { background: #34c759; }
+  .tema-switch[aria-checked="true"] .bolinha { transform: translateX(18px); }
+  .tema-switch:focus-visible .trilho { outline: 2px solid var(--brand); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .tema-switch .trilho, .tema-switch .bolinha { transition: none; } }
   @media (max-width: 560px) {
     header { flex-wrap: wrap; }
     header > div:first-child { flex: 1 1 100%; }
     .acoes { width: 100%; }
-    .acoes a, .acoes button { flex: 1; text-align: center; min-height: 40px; }
+    .acoes { gap: 6px; }
+    .acoes > a, .acoes > button:not(.tema-switch), .mais { flex: 1 1 0; min-width: 0; }
+    .acoes > a, .acoes > button:not(.tema-switch), .mais > summary { height: 40px; padding: 0 4px; width: 100%; font-size: 12px; }
+    .tema-switch { gap: 4px; }
   }
   textarea { flex: 1; resize: none; min-height: 46px; max-height: 140px; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; }
   form button { background: var(--brand); color: var(--brand-ink); border: 0; border-radius: 10px; padding: 0 18px; font: inherit; font-weight: 600; cursor: pointer; }
@@ -102,7 +119,10 @@
   .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 6px 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); max-width: 100%; }
   .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chip.meu { border-color: var(--brand); }
-  .chip.ex { color: var(--muted); }
+  .chip.ex { color: var(--muted); border-style: dashed; }
+  .chip.ex button:hover { color: var(--warn); }
+  .link-btn { border: 0; background: none; color: var(--brand); font: inherit; font-size: 13px; cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+  body.sem-exemplos .so-exemplos { display: none; }
   .chip button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 999px; }
   .chip button:hover { color: var(--warn); }
   .docs-msg { font-size: 13px; color: var(--muted); min-height: 1em; }
@@ -148,7 +168,7 @@
 
   /* Menu "Mais" no cabeçalho */
   .mais { position: relative; }
-  .mais > summary { list-style: none; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; white-space: nowrap; user-select: none; }
+  .mais > summary { list-style: none; user-select: none; }
   .mais > summary::-webkit-details-marker { display: none; }
   .mais[open] > summary, .mais > summary:hover { color: var(--brand); border-color: var(--brand); }
   .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 240px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 32px rgba(0,0,0,.18); display: grid; }
@@ -195,9 +215,6 @@
   /* Ações da resposta: copiar, avaliar, comparar */
   .acoes-resp .discreto { border-color: var(--line); color: var(--muted); }
   .acoes-resp .discreto:hover { color: var(--brand); border-color: var(--brand); }
-  .acoes-resp .discreto[aria-pressed="true"] { color: var(--brand); border-color: var(--brand); background: var(--user); }
-  .motivos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); margin-top: 8px; width: 100%; }
-  .motivos button { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
   .erro-acoes { margin-top: 10px; }
   .dica-erro { margin-top: 6px; font-size: 13px; color: var(--ink); background: var(--bg); border-radius: 8px; padding: 8px 10px; }
   .restaurada { align-self: center; font-size: 12px; color: var(--muted); border: 1px dashed var(--line); border-radius: 999px; padding: 3px 12px; }
@@ -242,19 +259,23 @@
       <p>Agente RAG · respostas só com base nos documentos, sempre citando a fonte</p>
     </div>
     <div class="acoes">
+      <button class="tema-switch" id="tema" type="button" role="switch" aria-checked="false" aria-label="Tema escuro" title="Tema escuro">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <span class="trilho"><span class="bolinha"></span></span>
+      </button>
       <a href="/como-funciona">Como funciona</a>
       <button id="nova" type="button">Nova conversa</button>
       <details class="mais" id="mais">
         <summary aria-label="Mais opções">Mais ▾</summary>
         <div class="menu" role="menu">
-          <button type="button" role="menuitem" id="m-qr">📱 QR code em tela cheia</button>
-          <button type="button" role="menuitemcheckbox" id="apresentar" aria-checked="false" aria-pressed="false" title="Letras maiores para o projetor">🔍 Modo apresentação</button>
-          <button type="button" role="menuitem" id="m-tema">🌓 Tema: <span id="tema-nome">automático</span></button>
+          <button type="button" role="menuitem" id="m-qr">QR code em tela cheia</button>
+          <button type="button" role="menuitemcheckbox" id="apresentar" aria-checked="false" aria-pressed="false" title="Letras maiores para o projetor">Modo apresentação</button>
+          <button type="button" role="menuitem" id="m-exemplos">Remover documentos de exemplo</button>
           <hr>
-          <button type="button" role="menuitem" id="m-md">⬇️ Baixar conversa (.md)</button>
-          <button type="button" role="menuitem" id="m-pdf">🖨️ Imprimir / salvar em PDF</button>
+          <button type="button" role="menuitem" id="m-md">Baixar conversa (.md)</button>
+          <button type="button" role="menuitem" id="m-pdf">Imprimir / salvar em PDF</button>
           <hr>
-          <button type="button" role="menuitem" id="m-guia">❓ Ver o guia rápido</button>
+          <button type="button" role="menuitem" id="m-guia">Ver o guia rápido</button>
           <button type="button" role="menuitem" id="m-atalhos" disabled><small>Atalhos: <b>/</b> pergunta · <b>Esc</b> fecha</small></button>
         </div>
       </details>
@@ -279,14 +300,14 @@
 
   <main id="chat" aria-live="polite">
     <div class="msg bot">
-      <div class="txt">Olá! Envie uma apostila, um contrato, um relatório ou um artigo e pergunte o que quiser sobre ele. Eu respondo só com base nos documentos, mostrando o trecho e a página de onde tirei cada informação (e o custo de cada consulta).
+      <div class="txt">Olá! Envie uma apostila, um contrato, um relatório ou um artigo e pergunte o que quiser sobre ele. Eu respondo só com base nos documentos, mostrando o trecho e a página de onde tirei cada informação (e o custo de cada consulta).<span class="so-exemplos">
 
-Ainda não tem um arquivo? Teste com os documentos de exemplo que já estão carregados: uma apostila de introdução à IA e normas do IFPA.</div>
+Ainda não tem um arquivo? Teste com os documentos de exemplo que já estão carregados: uma apostila de introdução à IA e normas do IFPA.</span></div>
       <div class="sugs" style="margin-top:10px">
         <button>Quais documentos você conhece?</button>
         <button>Resuma o documento que enviei</button>
-        <button>Qual a frequência mínima para ser aprovado no IFPA?</button>
-        <button>O que é um embedding, segundo a apostila de IA?</button>
+        <button class="so-exemplos">Qual a frequência mínima para ser aprovado no IFPA?</button>
+        <button class="so-exemplos">O que é um embedding, segundo a apostila de IA?</button>
       </div>
     </div>
   </main>
@@ -496,7 +517,7 @@ function paragrafoComDestaque(texto, frases) {
   return p;
 }
 
-// ---------- Copiar e avaliar ----------
+// ---------- Copiar ----------
 function textoParaCopiar(r) {
   let t = r.resposta;
   if (r.citacoes && r.citacoes.length) {
@@ -530,34 +551,7 @@ function acoesDaResposta(box, r, pergunta) {
     copiar.textContent = (await copiarTexto(textoParaCopiar(r))) ? 'Copiado ✓' : 'Não deu para copiar';
     setTimeout(() => { copiar.textContent = 'Copiar'; }, 2000);
   });
-  const up = botaoDiscreto('👍', 'Resposta útil');
-  const down = botaoDiscreto('👎', 'Resposta ruim');
-  up.setAttribute('aria-pressed', 'false'); down.setAttribute('aria-pressed', 'false');
-  const votar = async (voto, motivo) => {
-    up.disabled = down.disabled = true;
-    (voto === 'positivo' ? up : down).setAttribute('aria-pressed', 'true');
-    const motivos = acoes.querySelector('.motivos');
-    if (motivos) motivos.replaceChildren(document.createTextNode('Obrigado pelo retorno! 🙏'));
-    else acoes.append(el('span', 'motivos', 'Obrigado pelo retorno! 🙏'));
-    try {
-      await fetch('/api/feedback', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessao_id: sessao, voto, motivo: motivo || '', pergunta: (pergunta || '').slice(0, 1000), resposta: (r.resposta || '').slice(0, 4000) }),
-      });
-    } catch (_) { /* avaliação é opcional */ }
-  };
-  up.addEventListener('click', () => votar('positivo'));
-  down.addEventListener('click', () => {
-    if (acoes.querySelector('.motivos')) return;
-    const linha = el('div', 'motivos', 'O que deu errado?');
-    for (const m of ['Informação errada', 'Não achou no documento', 'Fonte não confere', 'Resposta confusa', 'Outro']) {
-      const b = el('button', '', m); b.type = 'button';
-      b.addEventListener('click', () => votar('negativo', m));
-      linha.append(b);
-    }
-    acoes.append(linha);
-  });
-  acoes.append(copiar, up, down);
+  acoes.append(copiar);
   box.append(acoes);
 }
 
@@ -720,7 +714,7 @@ async function enviar(texto) {
     const resp = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pergunta: texto, sessao_id: sessao, espaco_id: espaco, documento: alvoAtual() }),
+      body: JSON.stringify({ pergunta: texto, sessao_id: sessao, espaco_id: espaco, documento: alvoAtual(), exemplos: mostrarExemplos }),
       signal: controlador.signal,
     });
     if (!resp.ok || !resp.body) {
@@ -835,6 +829,22 @@ const btnUp = document.getElementById('btn-up');
 const inputArq = document.getElementById('arquivo');
 let limites = { extensoes: ['.md', '.pdf', '.txt'], max_mb: 15 };
 
+// Documentos de exemplo: o usuário pode tirá-los da tela e da busca (fica salvo neste navegador).
+let mostrarExemplos = true;
+try { mostrarExemplos = localStorage.getItem('exemplos') !== '0'; } catch (_) {}
+const btMenuExemplos = document.getElementById('m-exemplos');
+function aplicarExemplos(mostrar, recarregar = true) {
+  mostrarExemplos = mostrar;
+  try { localStorage.setItem('exemplos', mostrar ? '1' : '0'); } catch (_) {}
+  document.body.classList.toggle('sem-exemplos', !mostrar);
+  btMenuExemplos.textContent = mostrar ? 'Remover documentos de exemplo' : 'Mostrar documentos de exemplo';
+  if (recarregar) carregarDocs();
+}
+btMenuExemplos.addEventListener('click', () => {
+  aplicarExemplos(!mostrarExemplos);
+  avisoDocs(mostrarExemplos ? 'Os documentos de exemplo voltaram.' : 'Documentos de exemplo removidos. Agora a busca usa só os seus arquivos.');
+});
+
 function avisoDocs(texto, erro) {
   docsMsg.replaceChildren(document.createTextNode(texto || ''));
   docsMsg.className = 'docs-msg' + (erro ? ' erro' : '');
@@ -885,13 +895,28 @@ function pintarDocs(lista) {
     c.append(x);
     chips.append(c);
   }
-  for (const d of exemplos) {
+  if (exemplos.length) {
     const c = el('span', 'chip ex');
-    c.title = 'Documento de exemplo';
-    c.append(el('span', '', 'Exemplo: ' + d.documento));
+    c.title = 'Documentos de exemplo:\n' + exemplos.map(d => '• ' + d.documento).join('\n');
+    c.append(el('span', '', exemplos.length + ' documento' + (exemplos.length > 1 ? 's' : '') + ' de exemplo'));
+    const x = el('button', '', '×');
+    x.type = 'button';
+    x.title = 'Remover os documentos de exemplo';
+    x.setAttribute('aria-label', 'Remover os documentos de exemplo');
+    x.addEventListener('click', () => { aplicarExemplos(false); avisoDocs('Documentos de exemplo removidos. Para trazer de volta, use o menu Mais.'); });
+    c.append(x);
     chips.append(c);
   }
-  if (!lista.length) chips.append(el('span', 'docs-msg', 'Nenhum documento ainda. Envie o primeiro!'));
+  if (!lista.length) {
+    const vazio = el('span', 'docs-msg', 'Nenhum documento ainda. Envie o primeiro! ');
+    if (!mostrarExemplos) {
+      const volta = el('button', 'link-btn', 'Ou use os exemplos');
+      volta.type = 'button';
+      volta.addEventListener('click', () => aplicarExemplos(true));
+      vazio.append(volta);
+    }
+    chips.append(vazio);
+  }
   document.getElementById('docs-cont').textContent = 'Documentos (' + lista.length + ')';
   docsToggle.title = meus.length + ' seu(s) + ' + exemplos.length + ' de exemplo';
 }
@@ -905,7 +930,7 @@ async function chamarDocs(metodo, corpo, params) {
 }
 
 async function carregarDocs() {
-  try { pintarDocs((await chamarDocs('GET', null, { espaco_id: espaco })).documentos); }
+  try { pintarDocs((await chamarDocs('GET', null, { espaco_id: espaco, exemplos: mostrarExemplos })).documentos); }
   catch (e) { avisoDocs('Não consegui carregar a lista de documentos: ' + e.message, true); }
 }
 
@@ -951,6 +976,7 @@ async function enviarArquivos(lista) {
     const fd = new FormData();
     fd.append('espaco_id', espaco);
     fd.append('arquivo', arq);
+    fd.append('exemplos', mostrarExemplos ? 'true' : 'false');
     const antes = new Set(docsAtuais.filter(d => !d.exemplo).map(d => d.arquivo));
     mostrarProgresso(prefixo + 'Enviando “' + arq.name + '”... 0%', 0);
     try {
@@ -1009,7 +1035,7 @@ async function sugerirPerguntas(doc) {
 async function removerDoc(d) {
   if (!confirm('Remover “' + d.documento + '”?')) return;
   try {
-    const dados = await chamarDocs('DELETE', null, { espaco_id: espaco, arquivo: d.arquivo });
+    const dados = await chamarDocs('DELETE', null, { espaco_id: espaco, arquivo: d.arquivo, exemplos: mostrarExemplos });
     pintarDocs(dados.documentos);
     avisoDocs(dados.mensagem);
   } catch (e) { avisoDocs(e.message, true); }
@@ -1022,6 +1048,7 @@ const areaDrop = document.querySelector('.wrap');
 ['dragleave', 'drop'].forEach(ev => areaDrop.addEventListener(ev, (e) => { e.preventDefault(); areaDrop.classList.remove('arrastando'); }));
 areaDrop.addEventListener('drop', (e) => { if (!btnUp.disabled) enviarArquivos(e.dataTransfer && e.dataTransfer.files); });
 fetch('/api/info').then(r => r.json()).then(i => { if (i.upload) limites = i.upload; }).catch(() => {});
+aplicarExemplos(mostrarExemplos, false);
 carregarDocs();
 
 // Modo apresentação: tudo maior para o projetor (fica salvo neste navegador).
@@ -1030,7 +1057,7 @@ function aplicarApresentacao(ligado) {
   document.body.classList.toggle('apresentacao', ligado);
   btApresentar.setAttribute('aria-pressed', String(ligado));
   btApresentar.setAttribute('aria-checked', String(ligado));
-  btApresentar.textContent = '🔍 Modo apresentação' + (ligado ? ' ✓' : '');
+  btApresentar.textContent = 'Modo apresentação' + (ligado ? ' ✓' : '');
   try { localStorage.setItem('modo_apresentacao', ligado ? '1' : '0'); } catch (_) {}
 }
 btApresentar.addEventListener('click', () => aplicarApresentacao(!document.body.classList.contains('apresentacao')));
@@ -1041,19 +1068,26 @@ const menuMais = document.getElementById('mais');
 menuMais.querySelector('.menu').addEventListener('click', (e) => { if (e.target.closest('button')) menuMais.open = false; });
 document.addEventListener('click', (e) => { if (menuMais.open && !menuMais.contains(e.target)) menuMais.open = false; });
 
-// Tema: automático → claro → escuro.
-const TEMAS = ['auto', 'claro', 'escuro'];
-const NOMES_TEMA = { auto: 'automático', claro: 'claro', escuro: 'escuro' };
-function aplicarTema(t) {
-  if (t === 'auto') delete document.documentElement.dataset.tema; else document.documentElement.dataset.tema = t;
-  document.getElementById('tema-nome').textContent = NOMES_TEMA[t];
-  try { localStorage.setItem('tema', t); } catch (_) {}
+// Tema: interruptor claro/escuro. Sem escolha salva, segue o tema do sistema.
+const btTema = document.getElementById('tema');
+const temaDoSistema = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+function temaEscuroAtivo() {
+  const t = document.documentElement.dataset.tema;
+  return t ? t === 'escuro' : !!(temaDoSistema && temaDoSistema.matches);
 }
-document.getElementById('m-tema').addEventListener('click', () => {
-  const atual = document.documentElement.dataset.tema || 'auto';
-  aplicarTema(TEMAS[(TEMAS.indexOf(atual) + 1) % TEMAS.length]);
+function pintarTema() {
+  const escuro = temaEscuroAtivo();
+  btTema.setAttribute('aria-checked', String(escuro));
+  btTema.title = escuro ? 'Mudar para o tema claro' : 'Mudar para o tema escuro';
+}
+btTema.addEventListener('click', () => {
+  const novo = temaEscuroAtivo() ? 'claro' : 'escuro';
+  document.documentElement.dataset.tema = novo;
+  try { localStorage.setItem('tema', novo); } catch (_) {}
+  pintarTema();
 });
-aplicarTema(document.documentElement.dataset.tema || 'auto');
+if (temaDoSistema && temaDoSistema.addEventListener) temaDoSistema.addEventListener('change', pintarTema);
+pintarTema();
 
 // Caixas de diálogo: fechar no ×, no botão e clicando fora.
 document.querySelectorAll('dialog').forEach(d => {

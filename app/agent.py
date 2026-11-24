@@ -221,7 +221,7 @@ def _erro(sessao_id: str, mensagem: str, status: str = "erro") -> RespostaOut:
     return RespostaOut(sessao_id=sessao_id, resposta=mensagem, status=status, confianca="baixa", custo=custo)
 
 
-def _preparar(pergunta: str, sessao_id: str, espaco_id: str | None, documento: dict | None):
+def _preparar(pergunta: str, sessao_id: str, espaco_id: str | None, documento: dict | None, exemplos: bool = True):
     """Valida a pergunta e monta a entrada e o config do agente. Devolve (entrada, config, erro)."""
     validacao = validar_pergunta(pergunta)
     if not validacao.ok:
@@ -231,7 +231,7 @@ def _preparar(pergunta: str, sessao_id: str, espaco_id: str | None, documento: d
     # thread_id = memória da conversa; espaco_id = quais documentos enviados esta pessoa pode consultar.
     # O espaço e o documento escolhido vão pelo config (e não pela pergunta), então o modelo não consegue trocá-los.
     config = {
-        "configurable": {"thread_id": sessao_id, "espaco_id": espaco_id or "", "documento": documento or None},
+        "configurable": {"thread_id": sessao_id, "espaco_id": espaco_id or "", "documento": documento or None, "exemplos": exemplos},
         "recursion_limit": settings.recursion_limit,
     }
     texto = validacao.texto
@@ -301,8 +301,10 @@ def _finalizar(mensagens: list[BaseMessage], sessao_id: str, espaco_id: str | No
     return RespostaOut(sessao_id=sessao_id, trechos=trechos, passos=passos, avisos=avisos, custo=custo, **resp.model_dump())
 
 
-def perguntar(pergunta: str, sessao_id: str, espaco_id: str | None = None, documento: dict | None = None) -> RespostaOut:
-    entrada, config, erro = _preparar(pergunta, sessao_id, espaco_id, documento)
+def perguntar(
+    pergunta: str, sessao_id: str, espaco_id: str | None = None, documento: dict | None = None, exemplos: bool = True
+) -> RespostaOut:
+    entrada, config, erro = _preparar(pergunta, sessao_id, espaco_id, documento, exemplos)
     if erro:
         return erro
     try:
@@ -313,14 +315,14 @@ def perguntar(pergunta: str, sessao_id: str, espaco_id: str | None = None, docum
 
 
 def perguntar_stream(
-    pergunta: str, sessao_id: str, espaco_id: str | None = None, documento: dict | None = None
+    pergunta: str, sessao_id: str, espaco_id: str | None = None, documento: dict | None = None, exemplos: bool = True
 ) -> Iterator[dict]:
     """Mesma lógica de `perguntar`, mas emitindo cada passo ReAct assim que ele acontece.
 
     Eventos: {"tipo": "passo", "passo": {...}} durante o raciocínio e, no fim,
     {"tipo": "final", "resposta": {...RespostaOut...}}.
     """
-    entrada, config, erro = _preparar(pergunta, sessao_id, espaco_id, documento)
+    entrada, config, erro = _preparar(pergunta, sessao_id, espaco_id, documento, exemplos)
     if erro:
         yield {"tipo": "final", "resposta": erro.model_dump()}
         return
