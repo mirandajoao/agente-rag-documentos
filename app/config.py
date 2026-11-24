@@ -113,6 +113,17 @@ class Settings:
     # Se verdadeiro, os documentos de exemplo (data/pdfs) também entram nas buscas de todos.
     incluir_exemplos: bool = os.getenv("INCLUIR_DOCUMENTOS_EXEMPLO", "true").strip().lower() in {"1", "true", "sim", "yes"}
 
+    # --- Monitoramento de erros (opcional): DSN do projeto no Sentry. Vazio = desligado ---
+    sentry_dsn: str = os.getenv("SENTRY_DSN", "").strip()
+
+    # --- Reranking: reordena os trechos achados e descarta os que não ajudam a responder ---
+    # "llm" (padrão): o mesmo modelo de chat dá uma nota de 0 a 10 a cada trecho; "off" desliga.
+    rerank: str = os.getenv("RERANK", "llm").strip().lower()
+    rerank_nota_minima: int = _int("RERANK_NOTA_MINIMA", 3)
+
+    # --- Documentos enviados guardados no banco (com DATABASE_URL) por até N dias ---
+    documentos_retencao_dias: int = _int("DOCUMENTOS_RETENCAO_DIAS", 30)
+
     # --- Caminhos ---
     pdf_dir: Path = Path(os.getenv("PDF_DIR", BASE_DIR / "data" / "pdfs"))
     upload_dir: Path = Path(os.getenv("UPLOAD_DIR", BASE_DIR / "data" / "uploads"))

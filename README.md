@@ -280,7 +280,18 @@ Recursos didáticos e de operação:
 - **Planilhas** `.xlsx` e `.csv`: cada linha vira "Coluna: valor | ..." e a "página" citada é um bloco de 40 linhas (`MAX_LINHAS_PLANILHA=3000`).
 - **Página da web pelo link** (`POST /api/documentos/url`): baixa só endereços públicos (proteção contra SSRF: IPs privados, locais e reservados são recusados, inclusive após redirecionamentos), até 8 MB, e extrai o texto principal sem menu nem scripts. Links diretos de PDF também funcionam.
 
-**Persistência opcional (Postgres, ex.: Neon):** com `DATABASE_URL` definida, o uso do dia, o limite ajustado, as pausas, o painel da turma (perguntas, ocultas e limpeza) e os números do administrador **sobrevivem a deploys e reinícios**. As tabelas são criadas sozinhas na primeira subida. Durante a execução tudo continua em memória e cada mudança é gravada em segundo plano; sem banco, ou com o banco fora do ar, o app segue só em memória, como antes. Os documentos e embeddings continuam no ChromaDB (a migração para pgvector é a próxima etapa).
+**Persistência opcional (Postgres, ex.: Neon):** com `DATABASE_URL` definida, o uso do dia, o limite ajustado, as pausas, o painel da turma (perguntas, ocultas e limpeza) e os números do administrador **sobrevivem a deploys e reinícios**. As tabelas são criadas sozinhas na primeira subida. Durante a execução tudo continua em memória e cada mudança é gravada em segundo plano; sem banco, ou com o banco fora do ar, o app segue só em memória, como antes. Com o banco ligado, também ficam salvos:
+
+- **Documentos enviados:** o arquivo original e cada trecho com o embedding numa coluna `vector` do pgvector (ou `REAL[]`, se o banco não tiver a extensão). Na subida, os trechos voltam para o ChromaDB sem vetorizar de novo e os arquivos voltam para o disco. Ficam no banco por `DOCUMENTOS_RETENCAO_DIAS` (30).
+- **Memória das conversas:** o histórico de cada sessão (`PostgresSaver` do LangGraph), então perguntas de acompanhamento continuam funcionando depois de um reinício. Conversas paradas há mais de `MEMORIA_RETENCAO_DIAS` (7) são apagadas. Se o banco falhar no meio de uma pergunta, o agente passa para a memória do servidor e responde mesmo assim.
+
+**Reranking:** depois da busca híbrida, o mesmo modelo de chat dá uma nota de 0 a 10 a cada trecho (cerca de US$ 0,0002 por busca). Os trechos são reordenados e os com nota abaixo de `RERANK_NOTA_MINIMA` (3) saem; se nenhum ajuda, a resposta é "não encontrei". A nota aparece no painel de trechos e o laboratório do modo aula liga e desliga. `RERANK=off` desliga no servidor.
+
+**Visualizador (`/ver`):** as fontes abrem o documento na página citada com o trecho destacado. PDFs aparecem como a página de verdade (PDF.js, servido pelo próprio app em `/vendor/pdfjs`); Word, PowerPoint, planilhas e páginas da web aparecem como o texto da página.
+
+**Monitoramento:** com `SENTRY_DSN`, erros do servidor vão para o Sentry com o tipo, a mensagem e a pilha, sem corpo das requisições, variáveis locais, cabeçalhos, parâmetros da URL ou dados do usuário.
+
+**Testes automáticos:** `python tests/rodar.py` roda os testes sem chamar a OpenAI (com `TEST_DATABASE_URL` roda também os de banco). O GitHub Actions roda tudo a cada PR e a cada push na `main`, com um Postgres com pgvector.
 
 **Interface (minimalista):**
 - Uma coluna só, centralizada. A tela inicial mostra a área "arraste um arquivo" e 3 sugestões, e some quando a conversa começa.

@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from app.agent import construir_agente, perguntar, perguntar_stream
 from app.config import BASE_DIR, settings
 from app.guardrails import LimitadorDeTaxa, limitador
-from app import controle, persistencia, turma
+from app import acervo, controle, monitoramento, persistencia, turma
 from app.ingest import (
     ESPACO_EXEMPLOS,
     EXTENSOES_ACEITAS,
@@ -34,6 +34,7 @@ from app.ingest import (
     documentos_do_espaco,
     indexar_arquivo_detalhado,
     indice_existe,
+    paginas_do_documento,
     remover_documentos,
     titulo_amigavel,
 )
@@ -63,6 +64,8 @@ from app.tools import marcar_base_alterada
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s | %(message)s")
 log = logging.getLogger("api")
 
+monitoramento.iniciar()
+
 STATIC = BASE_DIR / "static"
 ESTADO = {"pronto": False, "erro": None}
 
@@ -79,6 +82,12 @@ async def lifespan(_: FastAPI):
         if not indice_existe():
             log.info("Índice vetorial não encontrado — construindo a partir de %s", settings.pdf_dir)
             await run_in_threadpool(construir_indice)
+        # Documentos enviados antes do reinício (com DATABASE_URL) voltam para o índice.
+        try:
+            await run_in_threadpool(acervo.restaurar)
+            marcar_base_alterada()
+        except Exception:
+            log.exception("Falha ao restaurar os documentos enviados; seguindo sem eles")
         construir_agente()
         ESTADO["pronto"] = True
         log.info("Agente pronto (modelo=%s, embeddings=%s)", settings.chat_model, settings.embedding_model)
@@ -280,6 +289,53 @@ def abrir_documento(espaco_id: str = Query(""), arquivo: str = Query(...), exemp
         media_type=TIPOS_ARQUIVO[caminho.suffix.lower()],
         headers={"Content-Disposition": f'inline; filename="{nome}"', "Cache-Control": "private, max-age=300"},
     )
+
+
+@app.get("/api/documentos/pagina")
+def pagina_do_documento(
+    arquivo: str = Query(...), pagina: int = Query(1, ge=1, le=100000), espaco_id: str = Query(""), exemplo: bool = Query(False)
+):
+    """Texto de uma página (ou slide) como foi indexado, para o visualizador destacar o trecho citado."""
+    nome = _nome_seguro(arquivo)
+    espaco = ESPACO_EXEMPLOS if exemplo else _validar_espaco(espaco_id)
+    paginas = paginas_do_documento(espaco, nome)
+    if not paginas:
+        raise HTTPException(404, "Documento não encontrado. Ele pode ter sido removido.")
+    numeros = [p for p, _ in paginas]
+    alvo = pagina if pagina in numeros else min(numeros, key=lambda n: abs(n - pagina))
+    texto = dict(paginas)[alvo]
+    titulo = next((d["documento"] for d in documentos_do_espaco(espaco, incluir_exemplos=False) if d["arquivo"] == nome), nome)
+    return {
+        "documento": titulo,
+        "arquivo": nome,
+        "pagina": alvo,
+        "paginas": numeros,
+        "texto": texto,
+        "pdf": nome.lower().endswith(".pdf"),
+        "slides": nome.lower().endswith(".pptx"),
+    }
+
+
+@app.get("/ver", include_in_schema=False)
+def visualizador():
+    return FileResponse(STATIC / "ver.html", headers={"Cache-Control": "no-cache"})
+
+
+VENDOR = (STATIC / "vendor").resolve()
+TIPOS_VENDOR = {".mjs": "text/javascript", ".js": "text/javascript", ".bcmap": "application/octet-stream",
+                ".pfb": "application/octet-stream", ".ttf": "font/ttf", ".txt": "text/plain"}
+
+
+@app.get("/vendor/{caminho:path}", include_in_schema=False)
+def vendor(caminho: str):
+    """Bibliotecas de terceiros servidas pelo próprio app (sem depender de CDN no laboratório)."""
+    alvo = (VENDOR / caminho).resolve()
+    if VENDOR not in alvo.parents or not alvo.is_file():
+        raise HTTPException(404)
+    tipo = TIPOS_VENDOR.get(alvo.suffix.lower()) or ("text/plain" if alvo.name == "LICENSE" else None)
+    if not tipo:
+        raise HTTPException(404)
+    return FileResponse(alvo, media_type=tipo, headers={"Cache-Control": "public, max-age=604800"})
 
 
 @app.get("/api/documentos", response_model=DocumentosOut)
@@ -572,6 +628,7 @@ def info(request: Request):
             "top_k": settings.top_k,
             "semelhanca_minima": round(1 - settings.max_distance, 2),
             "tamanho_trecho": settings.chunk_size,
+            "rerank": settings.rerank not in {"off", "0", "false", "nao", "não", ""},
         },
         "painel_turma": settings.painel_turma,
         "ministrante_disponivel": controle.disponivel(),

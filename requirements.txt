@@ -38,3 +38,8 @@ pillow>=10.0
 
 # --- Persistência opcional (DATABASE_URL, ex.: Neon) ---
 psycopg[binary]>=3.2
+psycopg-pool>=3.2
+langgraph-checkpoint-postgres>=2.0  # memória das conversas no banco
+
+# --- Monitoramento de erros (opcional, SENTRY_DSN) ---
+sentry-sdk>=2.20,<3

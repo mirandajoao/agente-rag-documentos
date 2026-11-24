@@ -25,6 +25,7 @@ from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.config import settings
+from app import rerank
 from app.ingest import ESPACO_EXEMPLOS, abrir_vectorstore, documentos_do_espaco, trechos_do_documento
 
 log = logging.getLogger("tools")
@@ -254,12 +255,31 @@ def buscar_documentos(consulta: str, pensamento: str, runtime: ToolRuntime) -> s
             "informe ao usuário que os documentos não tratam desse assunto."
         )
 
+    # Reranking: o modelo dá uma nota a cada trecho; os que não ajudam saem antes de chegar ao agente.
+    parametros = _parametros_da_execucao(runtime)
+    if rerank.ativo(parametros):
+        rr = rerank.reordenar(consulta, resultados)
+        if rr.uso:
+            sessao = str(_configurable(runtime).get("thread_id") or "")
+            with _trava:
+                _uso_extra[sessao].extend(rr.uso)
+        if rr.usado and not rr.resultados:
+            return (
+                f"{SEM_EVIDENCIA}: a busca achou {len(resultados)} trecho(s), mas nenhum ajuda a responder "
+                f"'{consulta}' (reranking). Tente reformular uma vez com outros termos ou informe ao usuário "
+                "que os documentos não tratam desse assunto."
+            )
+        com_nota = rr.resultados
+    else:
+        com_nota = [(d, r, None) for d, r in resultados]
+
     blocos = []
-    for i, (doc, relevancia) in enumerate(resultados, start=1):
+    for i, (doc, relevancia, nota) in enumerate(com_nota, start=1):
         m = doc.metadata
         artigo = f" | Art. {m['artigo']}" if m.get("artigo") else ""
+        rotulo = relevancia if nota is None else f"{relevancia} · nota {nota}"
         blocos.append(
-            f"[{i}] {m.get('fonte', '?')} | página {m.get('pagina', '?')}{artigo} | relevância {relevancia} | origem: {_origem(m.get('espaco'))}\n"
+            f"[{i}] {m.get('fonte', '?')} | página {m.get('pagina', '?')}{artigo} | relevância {rotulo} | origem: {_origem(m.get('espaco'))}\n"
             f"{doc.page_content.strip()}"
         )
     return "\n\n---\n\n".join(blocos)

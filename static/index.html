@@ -133,6 +133,7 @@
   .trecho-top a { color: inherit; text-decoration: underline; text-decoration-color: var(--brand); text-underline-offset: 3px; }
   .selo { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--soft); }
   .selo.cit { background: var(--mark); color: #0b1530; font-weight: 600; }
+  .selo.nota { color: var(--brand); border: 1px solid var(--brand); background: transparent; }
   .barra { flex: 1 1 120px; display: flex; align-items: center; gap: 6px; min-width: 120px; }
   .barra i { display: block; height: 5px; border-radius: 999px; background: var(--line); flex: 1; overflow: hidden; }
   .barra i span { display: block; height: 100%; background: var(--brand); }
@@ -234,6 +235,7 @@
   .lab { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px; }
   .lab > summary { font-weight: 600; color: var(--ink); font-size: 13px; }
   .lab-grade { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 16px; margin-top: 10px; }
+  .lab-grade .lab-check { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
   .lab label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
   .lab label b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
   .lab input[type=range] { width: 100%; accent-color: var(--brand); }
@@ -387,6 +389,7 @@
         <label>Trechos por busca (top_k): <b id="lab-k-v">4</b><input type="range" id="lab-k" min="1" max="10" step="1" value="4"></label>
         <label>Semelhança mínima: <b id="lab-s-v">25%</b><input type="range" id="lab-s" min="0" max="90" step="5" value="25"></label>
         <label>Tamanho do trecho: <b id="lab-t-v">1.200</b><input type="range" id="lab-t" min="300" max="3000" step="100" value="1200"></label>
+        <label class="lab-check"><input type="checkbox" id="lab-r" checked> Reranking: o modelo dá nota aos trechos e descarta os que não ajudam</label>
       </div>
       <small>Valem para as próximas perguntas (top_k e semelhança) e para os próximos envios (tamanho do trecho: reenvie o arquivo para ver a diferença). <button class="link-btn" type="button" id="lab-reset">Voltar ao padrão</button></small>
     </details>
@@ -548,21 +551,27 @@ function pintarTotal() {
 
 // A tela inicial some assim que a conversa começa.
 const inicio = document.getElementById('inicio');
-function atualizarInicio() { inicio.hidden = !!chat.querySelector('.msg'); }
+function atualizarInicio() {
+  const conversando = !!chat.querySelector('.msg');
+  inicio.hidden = conversando;
+  // A IA lembra das perguntas anteriores desta conversa; o lápis (nova conversa) começa do zero.
+  q.placeholder = conversando ? 'Continue a conversa: a IA lembra das perguntas anteriores...' : 'Pergunte algo sobre os seus documentos...';
+}
 
-// Link para abrir o arquivo original (PDFs abrem direto na página citada).
-function linkArquivo(t, pagina) {
+// Link para o visualizador: abre o documento na página citada, com o trecho destacado.
+function linkArquivo(t, pagina, trecho) {
   if (!t || !t.arquivo) return null;
   const params = new URLSearchParams({ arquivo: t.arquivo });
   if (t.origem === 'exemplo') params.set('exemplo', 'true'); else params.set('espaco_id', espaco);
-  const pdf = t.arquivo.toLowerCase().endsWith('.pdf');
-  return '/api/documentos/arquivo?' + params + (pdf && pagina ? '#page=' + pagina : '');
+  if (pagina) params.set('pagina', pagina);
+  if (trecho) params.set('trecho', String(trecho).replace(/\s+/g, ' ').trim().slice(0, 300));
+  return '/ver?' + params;
 }
 function rotuloComLink(texto, href) {
   if (!href) return el('b', '', texto);
   const a = el('a', '', texto);
   a.href = href; a.target = '_blank'; a.rel = 'noopener';
-  a.title = 'Abrir o documento' + (href.includes('#page=') ? ' nesta página' : '');
+  a.title = 'Abrir o documento' + (href.includes('pagina=') ? ' nesta página, com o trecho destacado' : '');
   const b = el('b'); b.append(a); return b;
 }
 
@@ -732,10 +741,10 @@ function renderResposta(r, opts = {}) {
     for (const c of citacoes) {
       const fonte = trechos.find(t => t.documento === c.documento && t.arquivo && (!c.pagina || t.pagina === c.pagina))
         || trechos.find(t => t.documento === c.documento && t.arquivo);
-      const href = linkArquivo(fonte, c.pagina);
+      const href = linkArquivo(fonte, c.pagina, c.trecho);
       const chip = el(href ? 'a' : 'span', 'fonte');
       if (href) { chip.href = href; chip.target = '_blank'; chip.rel = 'noopener'; }
-      chip.title = (c.trecho ? '“' + c.trecho + '”\n' : '') + (href ? 'Clique para abrir o documento' + (c.pagina ? ' nesta página' : '') : '');
+      chip.title = (c.trecho ? '“' + c.trecho + '”\n' : '') + (href ? 'Clique para abrir o documento' + (c.pagina ? ' nesta página, com o trecho destacado' : '') : '');
       chip.append(el('span', '', c.documento + (c.pagina ? ', p. ' + c.pagina : '')));
       linha.append(chip);
     }
@@ -758,7 +767,8 @@ function renderResposta(r, opts = {}) {
     ordenados.forEach((t, i) => {
       const c = el('div', 'trecho' + (t.citado ? ' citado' : ''));
       const top = el('div', 'trecho-top');
-      top.append(rotuloComLink(t.documento + (t.pagina ? ', p. ' + t.pagina : ''), linkArquivo(t, t.pagina)));
+      const usados = t.citado ? citacoes.filter(cc => cc.documento === t.documento && (!cc.pagina || !t.pagina || cc.pagina === t.pagina)).map(cc => cc.trecho) : [];
+      top.append(rotuloComLink(t.documento + (t.pagina ? ', p. ' + t.pagina : ''), linkArquivo(t, t.pagina, usados[0] || (t.texto || '').replace(/^\(continuação do Art\. \d+\) /, '').slice(0, 200))));
       top.append(el('span', 'selo', t.origem === 'exemplo' ? 'exemplo' : 'seu documento'));
       if (t.citado) top.append(el('span', 'selo cit', 'usado na resposta'));
       if (t.relevancia !== null && t.relevancia !== undefined) {
@@ -770,6 +780,11 @@ function renderResposta(r, opts = {}) {
         top.append(barra);
       } else {
         top.append(el('span', 'selo', t.tipo_busca === 'resumo' ? 'documento inteiro' : 'palavra-chave'));
+      }
+      if (t.nota !== null && t.nota !== undefined) {
+        const sn = el('span', 'selo nota', 'nota ' + t.nota + '/10');
+        sn.title = 'Nota do reranking: o quanto o modelo achou que este trecho ajuda a responder';
+        top.append(sn);
       }
       const frases = t.citado ? citacoes.filter(cc => cc.documento === t.documento && (!cc.pagina || !t.pagina || cc.pagina === t.pagina)).map(cc => cc.trecho) : [];
       c.append(top, paragrafoComDestaque(t.texto || '', frases));
@@ -1215,8 +1230,8 @@ const areaDrop = document.querySelector('.app');
 areaDrop.addEventListener('drop', (e) => { if (!btnUp.disabled) enviarArquivos(e.dataTransfer && e.dataTransfer.files); });
 
 // ---------- Laboratório de parâmetros (modo aula) ----------
-const PADRAO_BUSCA = { top_k: 4, semelhanca_minima: 0.25, tamanho_trecho: 1200 };
-const labK = document.getElementById('lab-k'), labS = document.getElementById('lab-s'), labT = document.getElementById('lab-t');
+const PADRAO_BUSCA = { top_k: 4, semelhanca_minima: 0.25, tamanho_trecho: 1200, rerank: true };
+const labK = document.getElementById('lab-k'), labS = document.getElementById('lab-s'), labT = document.getElementById('lab-t'), labR = document.getElementById('lab-r');
 function pintarLab() {
   document.getElementById('lab-k-v').textContent = labK.value;
   document.getElementById('lab-s-v').textContent = labS.value + '%';
@@ -1224,23 +1239,23 @@ function pintarLab() {
 }
 function salvarLab() {
   pintarLab();
-  try { localStorage.setItem('lab', JSON.stringify({ k: labK.value, s: labS.value, t: labT.value })); } catch (_) {}
+  try { localStorage.setItem('lab', JSON.stringify({ k: labK.value, s: labS.value, t: labT.value, r: labR.checked })); } catch (_) {}
 }
 function restaurarLab(padrao) {
-  labK.value = padrao.top_k; labS.value = Math.round(padrao.semelhanca_minima * 100); labT.value = padrao.tamanho_trecho;
+  labK.value = padrao.top_k; labS.value = Math.round(padrao.semelhanca_minima * 100); labT.value = padrao.tamanho_trecho; labR.checked = padrao.rerank !== false;
   salvarLab();
 }
-[labK, labS, labT].forEach(x => x.addEventListener('input', salvarLab));
+[labK, labS, labT, labR].forEach(x => x.addEventListener('input', salvarLab));
 document.getElementById('lab-reset').addEventListener('click', () => restaurarLab(PADRAO_BUSCA));
 try {
   const salvo = JSON.parse(localStorage.getItem('lab') || 'null');
-  if (salvo) { labK.value = salvo.k; labS.value = salvo.s; labT.value = salvo.t; }
+  if (salvo) { labK.value = salvo.k; labS.value = salvo.s; labT.value = salvo.t; if (salvo.r !== undefined) labR.checked = !!salvo.r; }
 } catch (_) {}
 pintarLab();
 // Só no modo aula os parâmetros do laboratório valem; fora dele, o padrão do servidor.
 function parametrosBusca() {
   if (!document.body.classList.contains('aula')) return null;
-  return { top_k: Number(labK.value), semelhanca_minima: Number(labS.value) / 100 };
+  return { top_k: Number(labK.value), semelhanca_minima: Number(labS.value) / 100, rerank: labR.checked };
 }
 function tamanhoTrecho() {
   return document.body.classList.contains('aula') ? Number(labT.value) : null;
@@ -1533,10 +1548,9 @@ function fecharVisor() {
 }
 document.getElementById('gaveta-fechar').addEventListener('click', fecharVisor);
 chat.addEventListener('click', (e) => {
-  const a = e.target.closest('a[href^="/api/documentos/arquivo"]');
+  const a = e.target.closest('a[href^="/ver?"]');
   if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;
-  const arq = new URL(a.href, location.href).searchParams.get('arquivo') || '';
-  if (!arq.toLowerCase().endsWith('.pdf') || !matchMedia('(min-width: 901px)').matches) return;  // celular: nova aba
+  if (!matchMedia('(min-width: 901px)').matches) return;  // celular: nova aba
   e.preventDefault();
   abrirVisor(a.getAttribute('href'), a.textContent);
 });

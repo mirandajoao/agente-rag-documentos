@@ -449,7 +449,21 @@ def indexar_arquivo_detalhado(caminho: Path, espaco: str, titulo: str, tamanho_t
         # Reenviar um arquivo com o mesmo nome substitui a versão anterior.
         abrir_vectorstore()._collection.delete(where={"$and": [{"espaco": espaco}, {"arquivo": caminho.name}]})
         _gravar(abrir_vectorstore(), chunks)
+    _guardar_no_banco(espaco, caminho, titulo, chunks)
     return len(chunks), int(doc.metadata.get("paginas_ocr") or 0)
+
+
+def _guardar_no_banco(espaco: str, caminho: Path, titulo: str, chunks: list[Document]) -> None:
+    """Com DATABASE_URL, guarda o arquivo e os trechos (com os embeddings já calculados) no Postgres."""
+    from app import acervo, persistencia
+
+    if not persistencia.ativo() or not chunks:
+        return
+    try:
+        dados = abrir_vectorstore()._collection.get(ids=[c.id for c in chunks], include=["documents", "metadatas", "embeddings"])
+        acervo.salvar(espaco, caminho, titulo, list(dados["ids"]), list(dados["documents"]), list(dados["metadatas"]), list(dados["embeddings"]))
+    except Exception:  # o banco é um extra: o documento já está pronto para perguntas
+        log.exception("Falha ao guardar o documento no banco")
 
 
 def remover_documentos(espaco: str, arquivo: str | None = None) -> None:
@@ -459,6 +473,9 @@ def remover_documentos(espaco: str, arquivo: str | None = None) -> None:
     filtro = {"espaco": espaco} if not arquivo else {"$and": [{"espaco": espaco}, {"arquivo": arquivo}]}
     with _trava_escrita:
         abrir_vectorstore()._collection.delete(where=filtro)
+    from app import acervo
+
+    acervo.remover(espaco, arquivo)
 
 
 def documentos_do_espaco(espaco: str, incluir_exemplos: bool = True) -> list[dict]:
@@ -484,6 +501,29 @@ def trechos_do_documento(espaco: str, arquivo: str) -> list[Document]:
     )
     docs = [Document(page_content=t, metadata=m or {}) for t, m in zip(dados["documents"], dados["metadatas"])]
     return sorted(docs, key=lambda d: int(d.metadata.get("start_index") or 0))
+
+
+RE_CONTINUACAO = re.compile(r"^\(continuação do Art\. \d+\) ")
+RE_SLIDE_MARCA = re.compile(r"(?m)^# Slide (\d+)\n")
+
+
+def paginas_do_documento(espaco: str, arquivo: str) -> list[tuple[int, str]]:
+    """Texto de cada página (ou slide) de um documento indexado, sem repetir a sobreposição entre trechos."""
+    paginas: dict[int, list[str]] = {}
+    fim_anterior = -1
+    for t in trechos_do_documento(espaco, arquivo):
+        texto = RE_CONTINUACAO.sub("", t.page_content)
+        inicio = int(t.metadata.get("start_index") or 0)
+        if 0 <= inicio < fim_anterior:  # corta o pedaço repetido do trecho anterior
+            texto = texto[fim_anterior - inicio :]
+        fim_anterior = max(fim_anterior, inicio + len(RE_CONTINUACAO.sub("", t.page_content)))
+        pagina = int(t.metadata.get("pagina") or 1)
+        pedacos = RE_SLIDE_MARCA.split(texto)
+        if pedacos[0].strip():
+            paginas.setdefault(pagina, []).append(pedacos[0])
+        for numero, conteudo in zip(pedacos[1::2], pedacos[2::2]):
+            paginas.setdefault(int(numero), []).append(conteudo)
+    return [(p, "".join(partes).strip()) for p, partes in sorted(paginas.items())]
 
 
 def main() -> None:
