@@ -81,7 +81,7 @@ def validar_pergunta(pergunta: str) -> ResultadoValidacao:
 
 
 class LimitadorDeTaxa:
-    """Janela deslizante de 60 s por cliente (IP). Protege a cota da OpenAI."""
+    """Janela deslizante de 60 s por chave (navegador ou IP). Protege a cota da OpenAI."""
 
     def __init__(self, limite_por_minuto: int):
         self.limite = limite_por_minuto

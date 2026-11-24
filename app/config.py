@@ -76,7 +76,11 @@ class Settings:
 
     # --- Blindagem de entrada ---
     max_question_chars: int = _int("MAX_QUESTION_CHARS", 1000)
+    # Limites por navegador (espaço/sessão). Num laboratório, todos saem pelo mesmo IP público,
+    # então o limite por IP é só um teto geral, bem mais alto.
     rate_limit_per_minute: int = _int("RATE_LIMIT_PER_MINUTE", 15)
+    rate_limit_ip_por_minuto: int = _int("RATE_LIMIT_IP_PER_MINUTE", 300)
+    rate_limit_upload_ip_por_minuto: int = _int("RATE_LIMIT_UPLOAD_IP_PER_MINUTE", 90)
 
     # --- Custos exibidos ao usuário ---
     # Cotação usada só para exibir o custo em reais (ajuste no painel de variáveis).
