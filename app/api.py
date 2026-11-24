@@ -73,6 +73,8 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Converse com os seus documentos", version="2.0.0", lifespan=lifespan)
 limitador_upload = LimitadorDeTaxa(settings.rate_limit_upload_por_minuto)
+limitador_ip = LimitadorDeTaxa(settings.rate_limit_ip_por_minuto)
+limitador_upload_ip = LimitadorDeTaxa(settings.rate_limit_upload_ip_por_minuto)
 
 
 
@@ -90,14 +92,27 @@ def _cliente(request: Request) -> str:
 
 @app.post("/api/chat", response_model=RespostaOut)
 async def chat(dados: PerguntaIn, request: Request) -> RespostaOut:
-    if not limitador.permitir(_cliente(request)):
-        raise HTTPException(429, "Muitas perguntas em sequência. Aguarde um minuto.")
+    _limitar(request, dados.espaco_id or dados.sessao_id)
     _exigir_pronto_e_orcamento()
     # O agente é síncrono; rodar em threadpool evita travar o event loop.
     documento = dados.documento.model_dump() if dados.documento else None
     resp = await run_in_threadpool(perguntar, dados.pergunta, dados.sessao_id, dados.espaco_id, documento, dados.exemplos)
     orcamento.registrar(resp.custo.custo_usd)
     return resp
+
+
+def _limitar(request: Request, chave: str | None, upload: bool = False) -> None:
+    """Limite por navegador (espaço/sessão) + teto por IP.
+
+    Num laboratório, todos os alunos saem pela mesma rede (mesmo IP público):
+    limitar só por IP faria a turma inteira dividir a mesma cota.
+    """
+    pessoa, rede = (limitador_upload, limitador_upload_ip) if upload else (limitador, limitador_ip)
+    ip = _cliente(request)
+    if not pessoa.permitir(f"nav:{chave}" if chave else f"ip:{ip}"):
+        raise HTTPException(429, "Muitos envios em sequência. Aguarde um minuto." if upload else "Muitas perguntas em sequência. Aguarde um minuto.")
+    if not rede.permitir(ip):
+        raise HTTPException(429, "Muitos acessos desta rede agora. Aguarde um minuto.")
 
 
 def _exigir_pronto_e_orcamento() -> None:
@@ -110,8 +125,7 @@ def _exigir_pronto_e_orcamento() -> None:
 @app.post("/api/chat/stream")
 async def chat_stream(dados: PerguntaIn, request: Request):
     """Mesmo que /api/chat, mas em Server-Sent Events: cada passo ReAct chega assim que acontece."""
-    if not limitador.permitir(_cliente(request)):
-        raise HTTPException(429, "Muitas perguntas em sequência. Aguarde um minuto.")
+    _limitar(request, dados.espaco_id or dados.sessao_id)
     _exigir_pronto_e_orcamento()
     documento = dados.documento.model_dump() if dados.documento else None
 
@@ -132,8 +146,7 @@ async def chat_stream(dados: PerguntaIn, request: Request):
 @app.post("/api/comparar", response_model=ComparacaoOut)
 async def comparar(dados: ComparacaoIn, request: Request) -> ComparacaoOut:
     """A mesma pergunta respondida SEM RAG (só o modelo), para a demonstração lado a lado."""
-    if not limitador.permitir(_cliente(request)):
-        raise HTTPException(429, "Muitas perguntas em sequência. Aguarde um minuto.")
+    _limitar(request, dados.sessao_id)
     _exigir_pronto_e_orcamento()
     try:
         resp = await run_in_threadpool(comparar_sem_rag, dados.pergunta)
@@ -175,8 +188,7 @@ def _listar(espaco_id: str, mensagem: str = "", exemplos: bool = True) -> Docume
 @app.post("/api/documentos/sugestoes", response_model=SugestoesOut)
 async def sugestoes(dados: SugestoesIn, request: Request) -> SugestoesOut:
     """3 perguntas de exemplo sobre um documento recém-enviado."""
-    if not limitador.permitir(_cliente(request)):
-        raise HTTPException(429, "Muitas perguntas em sequência. Aguarde um minuto.")
+    _limitar(request, dados.espaco_id)
     _exigir_pronto_e_orcamento()
     try:
         resp = await run_in_threadpool(sugerir_perguntas, dados.espaco_id, _nome_seguro(dados.arquivo))
@@ -234,8 +246,7 @@ async def enviar_documento(
     _validar_espaco(espaco_id)
     if not ESTADO["pronto"]:
         raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
-    if not limitador_upload.permitir(_cliente(request)):
-        raise HTTPException(429, "Muitos envios em sequência. Aguarde um minuto.")
+    _limitar(request, espaco_id, upload=True)
     if orcamento.excedido():
         raise HTTPException(429, MENSAGEM_LIMITE)
 
