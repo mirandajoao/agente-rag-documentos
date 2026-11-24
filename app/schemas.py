@@ -67,6 +67,8 @@ class PerguntaIn(BaseModel):
     # Espaço de documentos do usuário (fica igual entre conversas no mesmo navegador).
     espaco_id: str | None = Field(None, min_length=8, max_length=64, pattern=ID_PATTERN)
     documento: DocumentoAlvo | None = None
+    # False quando o usuário removeu os documentos de exemplo da tela (ficam fora da busca dele).
+    exemplos: bool = True
 
 
 class ComparacaoIn(BaseModel):
@@ -77,20 +79,6 @@ class ComparacaoIn(BaseModel):
 class ComparacaoOut(BaseModel):
     resposta: str
     custo: Custo
-
-
-class FeedbackIn(BaseModel):
-    sessao_id: str = Field(..., min_length=8, max_length=64, pattern=ID_PATTERN)
-    voto: Literal["positivo", "negativo"]
-    motivo: str = Field("", max_length=200)
-    pergunta: str = Field("", max_length=1000)
-    resposta: str = Field("", max_length=4000)
-
-
-class FeedbackOut(BaseModel):
-    ok: bool = True
-    positivos: int
-    negativos: int
 
 
 class SugestoesIn(BaseModel):

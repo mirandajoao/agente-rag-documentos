@@ -98,7 +98,7 @@ def _busca_vetorial(consulta: str, filtro: dict, k: int) -> list[tuple[Document,
     return [(d, f"semântica {round(1 - dist, 3)}") for d, dist in vetoriais if dist <= settings.max_distance]
 
 
-def busca_hibrida(consulta: str, espaco: str, alvo: dict | None = None) -> list[tuple[Document, str]]:
+def busca_hibrida(consulta: str, espaco: str, alvo: dict | None = None, exemplos: bool = True) -> list[tuple[Document, str]]:
     """Busca vetorial (semântica) + BM25 (lexical), sem duplicatas.
 
     Com um documento escolhido (`alvo`), a busca fica restrita a ele. Sem
@@ -117,7 +117,8 @@ def busca_hibrida(consulta: str, espaco: str, alvo: dict | None = None) -> list[
     else:
         if espaco:
             grupos.append((espaco, ""))
-        if settings.incluir_exemplos or not espaco:
+        # Os exemplos entram se estiverem ligados no servidor e o usuário não os tiver removido da tela.
+        if (settings.incluir_exemplos and exemplos) or not espaco:
             grupos.append((ESPACO_EXEMPLOS, ""))
 
     relevantes: list[tuple[Document, str]] = []
@@ -160,10 +161,17 @@ def _espaco_da_execucao(runtime: ToolRuntime | None) -> str:
     return str(_configurable(runtime).get("espaco_id") or "")
 
 
+def _exemplos_da_execucao(runtime: ToolRuntime | None) -> bool:
+    """False quando o usuário removeu os documentos de exemplo da sessão dele."""
+    return bool(_configurable(runtime).get("exemplos", True))
+
+
 def _alvo_da_execucao(runtime: ToolRuntime | None) -> dict | None:
     """Documento escolhido no seletor "Perguntar sobre" (ou None = todos)."""
     alvo = _configurable(runtime).get("documento")
     if not alvo or not alvo.get("arquivo"):
+        return None
+    if alvo.get("exemplo") and not _exemplos_da_execucao(runtime):
         return None
     espaco = ESPACO_EXEMPLOS if alvo.get("exemplo") else _espaco_da_execucao(runtime)
     if not espaco:
@@ -171,9 +179,9 @@ def _alvo_da_execucao(runtime: ToolRuntime | None) -> dict | None:
     return {"espaco": espaco, "arquivo": str(alvo["arquivo"]), "documento": str(alvo.get("documento") or alvo["arquivo"])}
 
 
-def _visiveis(espaco: str) -> list[dict]:
+def _visiveis(espaco: str, exemplos: bool = True) -> list[dict]:
     if espaco:
-        return documentos_do_espaco(espaco, incluir_exemplos=settings.incluir_exemplos)
+        return documentos_do_espaco(espaco, incluir_exemplos=settings.incluir_exemplos and exemplos)
     return documentos_do_espaco(ESPACO_EXEMPLOS, incluir_exemplos=False)
 
 
@@ -217,7 +225,7 @@ def buscar_documentos(consulta: str, pensamento: str, runtime: ToolRuntime) -> s
     alvo = _alvo_da_execucao(runtime)
 
     try:
-        resultados = busca_hibrida(consulta, espaco, alvo)
+        resultados = busca_hibrida(consulta, espaco, alvo, _exemplos_da_execucao(runtime))
     except Exception as exc:
         log.exception("Falha na busca vetorial")
         return f"ERRO_BUSCA: a base vetorial está indisponível no momento ({type(exc).__name__})."
@@ -258,7 +266,7 @@ def listar_documentos(runtime: ToolRuntime) -> str:
     """
     alvo = _alvo_da_execucao(runtime)
     try:
-        docs = _visiveis(_espaco_da_execucao(runtime))
+        docs = _visiveis(_espaco_da_execucao(runtime), _exemplos_da_execucao(runtime))
     except Exception as exc:
         log.exception("Falha ao listar documentos")
         return f"ERRO_BUSCA: não foi possível listar os documentos ({type(exc).__name__})."
@@ -287,9 +295,9 @@ PROMPT_PARTE = (
 )
 
 
-def _resolver_documento(nome: str, espaco: str, alvo: dict | None) -> tuple[dict | None, str]:
+def _resolver_documento(nome: str, espaco: str, alvo: dict | None, exemplos: bool = True) -> tuple[dict | None, str]:
     """Descobre de qual documento o modelo está falando. Devolve (doc, mensagem_de_erro)."""
-    docs = _visiveis(espaco)
+    docs = _visiveis(espaco, exemplos)
     if alvo:
         for d in docs:
             if d["arquivo"] == alvo["arquivo"]:
@@ -363,7 +371,7 @@ def resumir_documento(documento: str, foco: str, runtime: ToolRuntime) -> str:
     """
     espaco = _espaco_da_execucao(runtime)
     try:
-        doc, erro = _resolver_documento(documento, espaco, _alvo_da_execucao(runtime))
+        doc, erro = _resolver_documento(documento, espaco, _alvo_da_execucao(runtime), _exemplos_da_execucao(runtime))
         if erro:
             return erro
         trechos = trechos_do_documento(doc["espaco"], doc["arquivo"])

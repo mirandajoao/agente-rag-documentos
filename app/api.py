@@ -41,8 +41,6 @@ from app.schemas import (
     ComparacaoOut,
     DocumentoOut,
     DocumentosOut,
-    FeedbackIn,
-    FeedbackOut,
     PerguntaIn,
     RespostaOut,
     SugestoesIn,
@@ -75,9 +73,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Converse com os seus documentos", version="2.0.0", lifespan=lifespan)
 limitador_upload = LimitadorDeTaxa(settings.rate_limit_upload_por_minuto)
-limitador_feedback = LimitadorDeTaxa(20)
-# Contagem de 👍/👎 desde que o servidor subiu (os detalhes ficam no log).
-FEEDBACK = {"positivos": 0, "negativos": 0}
+
 
 
 @app.get("/health")
@@ -99,7 +95,7 @@ async def chat(dados: PerguntaIn, request: Request) -> RespostaOut:
     _exigir_pronto_e_orcamento()
     # O agente é síncrono; rodar em threadpool evita travar o event loop.
     documento = dados.documento.model_dump() if dados.documento else None
-    resp = await run_in_threadpool(perguntar, dados.pergunta, dados.sessao_id, dados.espaco_id, documento)
+    resp = await run_in_threadpool(perguntar, dados.pergunta, dados.sessao_id, dados.espaco_id, documento, dados.exemplos)
     orcamento.registrar(resp.custo.custo_usd)
     return resp
 
@@ -120,7 +116,7 @@ async def chat_stream(dados: PerguntaIn, request: Request):
     documento = dados.documento.model_dump() if dados.documento else None
 
     def eventos():
-        for evento in perguntar_stream(dados.pergunta, dados.sessao_id, dados.espaco_id, documento):
+        for evento in perguntar_stream(dados.pergunta, dados.sessao_id, dados.espaco_id, documento, dados.exemplos):
             if evento["tipo"] == "final":
                 orcamento.registrar(((evento["resposta"].get("custo") or {}).get("custo_usd")) or 0)
             yield f"event: {evento['tipo']}\ndata: {json.dumps(evento, ensure_ascii=False)}\n\n"
@@ -171,8 +167,8 @@ def _nome_seguro(nome: str) -> str:
     return base + ext
 
 
-def _listar(espaco_id: str, mensagem: str = "") -> DocumentosOut:
-    docs = documentos_do_espaco(espaco_id, incluir_exemplos=settings.incluir_exemplos)
+def _listar(espaco_id: str, mensagem: str = "", exemplos: bool = True) -> DocumentosOut:
+    docs = documentos_do_espaco(espaco_id, incluir_exemplos=settings.incluir_exemplos and exemplos)
     return DocumentosOut(espaco_id=espaco_id, documentos=[DocumentoOut(**d) for d in docs], mensagem=mensagem)
 
 
@@ -221,11 +217,11 @@ def abrir_documento(espaco_id: str = Query(""), arquivo: str = Query(...), exemp
 
 
 @app.get("/api/documentos", response_model=DocumentosOut)
-async def listar_documentos(espaco_id: str = Query(...)) -> DocumentosOut:
+async def listar_documentos(espaco_id: str = Query(...), exemplos: bool = Query(True)) -> DocumentosOut:
     _validar_espaco(espaco_id)
     if not ESTADO["pronto"]:
         raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
-    return await run_in_threadpool(_listar, espaco_id)
+    return await run_in_threadpool(_listar, espaco_id, "", exemplos)
 
 
 @app.post("/api/documentos", response_model=DocumentosOut)
@@ -233,6 +229,7 @@ async def enviar_documento(
     request: Request,
     espaco_id: str = Form(...),
     arquivo: UploadFile = File(...),
+    exemplos: bool = Form(True),
 ) -> DocumentosOut:
     _validar_espaco(espaco_id)
     if not ESTADO["pronto"]:
@@ -283,11 +280,11 @@ async def enviar_documento(
     # Custo aproximado dos embeddings do upload (~300 tokens por trecho de 1.200 caracteres).
     orcamento.registrar(trechos * 300 * 0.02 / 1_000_000)
 
-    return await run_in_threadpool(_listar, espaco_id, f"“{titulo}” foi lido e dividido em {trechos} trecho{'s' if trechos != 1 else ''}. Já pode perguntar!")
+    return await run_in_threadpool(_listar, espaco_id, f"“{titulo}” foi lido e dividido em {trechos} trecho{'s' if trechos != 1 else ''}. Já pode perguntar!", exemplos)
 
 
 @app.delete("/api/documentos", response_model=DocumentosOut)
-async def remover_documento(espaco_id: str = Query(...), arquivo: str | None = Query(None)) -> DocumentosOut:
+async def remover_documento(espaco_id: str = Query(...), arquivo: str | None = Query(None), exemplos: bool = Query(True)) -> DocumentosOut:
     _validar_espaco(espaco_id)
     if not ESTADO["pronto"]:
         raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
@@ -303,17 +300,7 @@ async def remover_documento(espaco_id: str = Query(...), arquivo: str | None = Q
         (pasta / nome).unlink(missing_ok=True)
     else:
         shutil.rmtree(pasta, ignore_errors=True)
-    return await run_in_threadpool(_listar, espaco_id, "Documento removido." if nome else "Seus documentos foram removidos.")
-
-
-@app.post("/api/feedback", response_model=FeedbackOut)
-async def feedback(dados: FeedbackIn, request: Request) -> FeedbackOut:
-    if not limitador_feedback.permitir(_cliente(request)):
-        raise HTTPException(429, "Muitas avaliações seguidas. Aguarde um minuto.")
-    FEEDBACK["positivos" if dados.voto == "positivo" else "negativos"] += 1
-    # Uma linha JSON por avaliação: dá para filtrar no log do Railway com "FEEDBACK".
-    log.info("FEEDBACK %s", json.dumps(dados.model_dump(exclude={"sessao_id"}), ensure_ascii=False))
-    return FeedbackOut(**FEEDBACK)
+    return await run_in_threadpool(_listar, espaco_id, "Documento removido." if nome else "Seus documentos foram removidos.", exemplos)
 
 
 def url_publica(request: Request) -> str:
@@ -345,7 +332,6 @@ def info(request: Request):
             "max_documentos": settings.max_documentos_por_espaco,
         },
         "orcamento": orcamento.status(),
-        "feedback": dict(FEEDBACK),
     }
 
 
