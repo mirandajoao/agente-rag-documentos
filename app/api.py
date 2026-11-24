@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from app.agent import construir_agente, perguntar, perguntar_stream
 from app.config import BASE_DIR, settings
 from app.guardrails import LimitadorDeTaxa, limitador
-from app import turma
+from app import controle, turma
 from app.ingest import (
     ESPACO_EXEMPLOS,
     EXTENSOES_ACEITAS,
@@ -47,7 +47,9 @@ from app.schemas import (
     ComparacaoOut,
     DocumentoOut,
     DocumentosOut,
+    ControlesIn,
     EstudoIn,
+    MinistranteEntrarIn,
     LinkIn,
     MapaIn,
     ModeracaoIn,
@@ -103,6 +105,8 @@ def _cliente(request: Request) -> str:
 @app.post("/api/chat", response_model=RespostaOut)
 async def chat(dados: PerguntaIn, request: Request) -> RespostaOut:
     _limitar(request, dados.espaco_id or dados.sessao_id)
+    _checar_pausa(request)
+    controle.registrar_pergunta()
     _exigir_pronto_e_orcamento()
     # O agente é síncrono; rodar em threadpool evita travar o event loop.
     documento = dados.documento.model_dump() if dados.documento else None
@@ -127,6 +131,32 @@ def _limitar(request: Request, chave: str | None, upload: bool = False) -> None:
         raise HTTPException(429, "Muitos acessos desta rede agora. Aguarde um minuto.")
 
 
+limitador_senha = LimitadorDeTaxa(10)  # tentativas de senha erradas por minuto, por IP
+
+
+def _ministrante(request: Request) -> bool:
+    """True se a chamada traz a senha dos ministrantes (cabeçalho X-Ministrante) correta."""
+    return controle.senha_ok(request.headers.get("x-ministrante"))
+
+
+def _exigir_ministrante(request: Request) -> None:
+    if not controle.disponivel():
+        raise HTTPException(403, "O Modo ministrante está desligado: defina MINISTRANTE_SENHA no servidor.")
+    if _ministrante(request):
+        return
+    if not limitador_senha.permitir(_cliente(request)):
+        raise HTTPException(429, "Tentativas demais. Aguarde um minuto.")
+    raise HTTPException(401, "Só os ministrantes podem usar isto (senha ausente ou incorreta).")
+
+
+def _checar_pausa(request: Request, envio: bool = False) -> None:
+    """Controles de emergência: os ministrantes continuam usando mesmo com a pausa ligada."""
+    estado = controle.estado()
+    pausado = estado["envios_pausados"] if envio else estado["perguntas_pausadas"]
+    if pausado and not _ministrante(request):
+        raise HTTPException(503, controle.PAUSA_ENVIOS if envio else controle.PAUSA_PERGUNTAS)
+
+
 def _exigir_pronto_e_orcamento() -> None:
     if not ESTADO["pronto"]:
         raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
@@ -138,6 +168,8 @@ def _exigir_pronto_e_orcamento() -> None:
 async def chat_stream(dados: PerguntaIn, request: Request):
     """Mesmo que /api/chat, mas em Server-Sent Events: cada passo ReAct chega assim que acontece."""
     _limitar(request, dados.espaco_id or dados.sessao_id)
+    _checar_pausa(request)
+    controle.registrar_pergunta()
     _exigir_pronto_e_orcamento()
     documento = dados.documento.model_dump() if dados.documento else None
 
@@ -162,6 +194,7 @@ async def chat_stream(dados: PerguntaIn, request: Request):
 async def comparar(dados: ComparacaoIn, request: Request) -> ComparacaoOut:
     """A mesma pergunta respondida SEM RAG (só o modelo), para a demonstração lado a lado."""
     _limitar(request, dados.sessao_id)
+    _checar_pausa(request)
     _exigir_pronto_e_orcamento()
     try:
         resp = await run_in_threadpool(comparar_sem_rag, dados.pergunta)
@@ -204,6 +237,7 @@ def _listar(espaco_id: str, mensagem: str = "", exemplos: bool = True) -> Docume
 async def sugestoes(dados: SugestoesIn, request: Request) -> SugestoesOut:
     """3 perguntas de exemplo sobre um documento recém-enviado."""
     _limitar(request, dados.espaco_id)
+    _checar_pausa(request, envio=True)
     _exigir_pronto_e_orcamento()
     try:
         resp = await run_in_threadpool(sugerir_perguntas, dados.espaco_id, _nome_seguro(dados.arquivo))
@@ -286,6 +320,7 @@ async def _salvar_e_indexar(
         marcar_base_alterada()
     # Custo aproximado dos embeddings do upload (~300 tokens por trecho de 1.200 caracteres).
     orcamento.registrar(trechos * 300 * 0.02 / 1_000_000)
+    controle.registrar_envio(ext)
 
     detalhes = f" ({paginas_ocr} página{'s' if paginas_ocr != 1 else ''} lida{'s' if paginas_ocr != 1 else ''} por OCR)" if paginas_ocr else ""
     mensagem = f"“{titulo}”{origem} foi lido{detalhes} e dividido em {trechos} trecho{'s' if trechos != 1 else ''}. Já pode perguntar!"
@@ -304,6 +339,7 @@ async def enviar_documento(
     if not ESTADO["pronto"]:
         raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
     _limitar(request, espaco_id, upload=True)
+    _checar_pausa(request, envio=True)
     if orcamento.excedido():
         raise HTTPException(429, MENSAGEM_LIMITE)
 
@@ -326,6 +362,7 @@ async def enviar_link(dados: LinkIn, request: Request) -> DocumentosOut:
     if not ESTADO["pronto"]:
         raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
     _limitar(request, dados.espaco_id, upload=True)
+    _checar_pausa(request, envio=True)
     if orcamento.excedido():
         raise HTTPException(429, MENSAGEM_LIMITE)
     try:
@@ -393,7 +430,7 @@ limitador_moderacao = LimitadorDeTaxa(20)
 
 def _moderador(dados: ModeracaoIn, request: Request) -> None:
     if not settings.painel_senha:
-        raise HTTPException(403, "A moderação está desligada: defina a variável PAINEL_SENHA no servidor.")
+        raise HTTPException(403, "A moderação está desligada: defina a variável MINISTRANTE_SENHA no servidor.")
     if not limitador_moderacao.permitir(_cliente(request)):
         raise HTTPException(429, "Tentativas demais. Aguarde um minuto.")
     if not turma.senha_ok(dados.senha):
@@ -413,6 +450,49 @@ def limpar_painel(dados: ModeracaoIn, request: Request):
     _moderador(dados, request)
     turma.limpar()
     return {"ok": True}
+
+
+def _estado_ministrante() -> dict:
+    t = turma.estado()
+    return {
+        "controles": {**controle.estado(), "limite_diario_usd": orcamento.status()["limite_usd"]},
+        "orcamento": orcamento.status(),
+        "numeros": {
+            **controle.numeros(),
+            "navegadores_ativos": t["navegadores_ativos"],
+            "bloqueadas": t["bloqueadas"],
+            "recusadas": t["recusadas"],
+        },
+    }
+
+
+@app.post("/api/ministrante/entrar")
+def ministrante_entrar(dados: MinistranteEntrarIn, request: Request):
+    """Confere a senha dos ministrantes (sem guardar nada no servidor)."""
+    if not controle.disponivel():
+        raise HTTPException(403, "O Modo ministrante está desligado: defina MINISTRANTE_SENHA no servidor.")
+    if not limitador_senha.permitir(_cliente(request)):
+        raise HTTPException(429, "Tentativas demais. Aguarde um minuto.")
+    if not controle.senha_ok(dados.senha):
+        raise HTTPException(401, "Senha incorreta.")
+    return {"ok": True, **_estado_ministrante()}
+
+
+@app.get("/api/ministrante/estado")
+def ministrante_estado(request: Request):
+    _exigir_ministrante(request)
+    return _estado_ministrante()
+
+
+@app.post("/api/ministrante/controles")
+def ministrante_controles(dados: ControlesIn, request: Request):
+    """Pausar perguntas/envios e ajustar o limite de gasto do dia."""
+    _exigir_ministrante(request)
+    controle.atualizar(dados.perguntas_pausadas, dados.envios_pausados)
+    if dados.limite_diario_usd is not None:
+        orcamento.ajustar(dados.limite_diario_usd)
+    log.info("MINISTRANTE controles: %s", dados.model_dump(exclude_none=True))
+    return _estado_ministrante()
 
 
 @app.post("/api/busca/comparar")
@@ -438,7 +518,8 @@ async def ver_fatiamento(espaco_id: str = Query(""), arquivo: str = Query(...), 
 
 @app.post("/api/comparar-modelos")
 async def comparar_dois_modelos(dados: EstudoIn, request: Request):
-    """Modo aula: dois modelos respondendo à mesma pergunta com os mesmos trechos."""
+    """Modo aula: dois modelos respondendo à mesma pergunta com os mesmos trechos (só ministrantes: o modelo maior custa caro)."""
+    _exigir_ministrante(request)
     _validar_espaco(dados.espaco_id)
     _limitar(request, dados.espaco_id)
     _exigir_pronto_e_orcamento()
@@ -487,6 +568,8 @@ def info(request: Request):
             "tamanho_trecho": settings.chunk_size,
         },
         "painel_turma": settings.painel_turma,
+        "ministrante_disponivel": controle.disponivel(),
+        "controle": controle.estado(),
     }
 
 

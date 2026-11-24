@@ -103,7 +103,8 @@ class Settings:
     # Resposta aparecendo palavra por palavra (STREAM_TOKENS=false volta a mostrar só a resposta pronta).
     stream_tokens: bool = os.getenv("STREAM_TOKENS", "true").strip().lower() in {"1", "true", "sim", "yes"}
     # Senha do professor no painel da turma (ocultar perguntas e limpar). Vazia = moderação manual desligada.
-    painel_senha: str = os.getenv("PAINEL_SENHA", "").strip()
+    # Senha dos ministrantes: Modo ministrante no app e moderação do painel. Vazia = recursos desligados.
+    painel_senha: str = (os.getenv("MINISTRANTE_SENHA") or os.getenv("PAINEL_SENHA") or "").strip()
     # "Comparar modelos" (modo aula): dois modelos respondendo com os mesmos trechos.
     modelos_comparacao: str = os.getenv("MODELOS_COMPARACAO", "").strip()
     painel_turma: bool = os.getenv("PAINEL_TURMA", "true").strip().lower() in {"1", "true", "sim", "yes"}
