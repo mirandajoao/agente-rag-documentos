@@ -7,6 +7,7 @@ Railway:  uvicorn app.api:app --host 0.0.0.0 --port $PORT  (ver Dockerfile)
 from __future__ import annotations
 
 import io
+import json
 import logging
 import re
 import shutil
@@ -18,9 +19,9 @@ from pathlib import Path
 import segno
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
-from app.agent import construir_agente, perguntar
+from app.agent import construir_agente, perguntar, perguntar_stream
 from app.config import BASE_DIR, settings
 from app.guardrails import LimitadorDeTaxa, limitador
 from app.ingest import (
@@ -33,7 +34,18 @@ from app.ingest import (
     remover_documentos,
     titulo_amigavel,
 )
-from app.schemas import DocumentoOut, DocumentosOut, PerguntaIn, RespostaOut
+from app.extras import comparar_sem_rag, sugerir_perguntas
+from app.orcamento import MENSAGEM_LIMITE, orcamento
+from app.schemas import (
+    ComparacaoIn,
+    ComparacaoOut,
+    DocumentoOut,
+    DocumentosOut,
+    PerguntaIn,
+    RespostaOut,
+    SugestoesIn,
+    SugestoesOut,
+)
 from app.tools import marcar_base_alterada
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s | %(message)s")
@@ -79,11 +91,56 @@ def _cliente(request: Request) -> str:
 async def chat(dados: PerguntaIn, request: Request) -> RespostaOut:
     if not limitador.permitir(_cliente(request)):
         raise HTTPException(429, "Muitas perguntas em sequência. Aguarde um minuto.")
-    if not ESTADO["pronto"]:
-        raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
+    _exigir_pronto_e_orcamento()
     # O agente é síncrono; rodar em threadpool evita travar o event loop.
     documento = dados.documento.model_dump() if dados.documento else None
-    return await run_in_threadpool(perguntar, dados.pergunta, dados.sessao_id, dados.espaco_id, documento)
+    resp = await run_in_threadpool(perguntar, dados.pergunta, dados.sessao_id, dados.espaco_id, documento)
+    orcamento.registrar(resp.custo.custo_usd)
+    return resp
+
+
+def _exigir_pronto_e_orcamento() -> None:
+    if not ESTADO["pronto"]:
+        raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
+    if orcamento.excedido():
+        raise HTTPException(429, MENSAGEM_LIMITE)
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(dados: PerguntaIn, request: Request):
+    """Mesmo que /api/chat, mas em Server-Sent Events: cada passo ReAct chega assim que acontece."""
+    if not limitador.permitir(_cliente(request)):
+        raise HTTPException(429, "Muitas perguntas em sequência. Aguarde um minuto.")
+    _exigir_pronto_e_orcamento()
+    documento = dados.documento.model_dump() if dados.documento else None
+
+    def eventos():
+        for evento in perguntar_stream(dados.pergunta, dados.sessao_id, dados.espaco_id, documento):
+            if evento["tipo"] == "final":
+                orcamento.registrar(((evento["resposta"].get("custo") or {}).get("custo_usd")) or 0)
+            yield f"event: {evento['tipo']}\ndata: {json.dumps(evento, ensure_ascii=False)}\n\n"
+
+    # StreamingResponse percorre o gerador síncrono em threadpool, sem travar o event loop.
+    return StreamingResponse(
+        eventos(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/comparar", response_model=ComparacaoOut)
+async def comparar(dados: ComparacaoIn, request: Request) -> ComparacaoOut:
+    """A mesma pergunta respondida SEM RAG (só o modelo), para a demonstração lado a lado."""
+    if not limitador.permitir(_cliente(request)):
+        raise HTTPException(429, "Muitas perguntas em sequência. Aguarde um minuto.")
+    _exigir_pronto_e_orcamento()
+    try:
+        resp = await run_in_threadpool(comparar_sem_rag, dados.pergunta)
+    except Exception as exc:
+        log.exception("Falha na comparação sem RAG")
+        raise HTTPException(502, "Não foi possível consultar o modelo agora.") from exc
+    orcamento.registrar(resp.custo.custo_usd)
+    return resp
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +171,50 @@ def _listar(espaco_id: str, mensagem: str = "") -> DocumentosOut:
     return DocumentosOut(espaco_id=espaco_id, documentos=[DocumentoOut(**d) for d in docs], mensagem=mensagem)
 
 
+@app.post("/api/documentos/sugestoes", response_model=SugestoesOut)
+async def sugestoes(dados: SugestoesIn, request: Request) -> SugestoesOut:
+    """3 perguntas de exemplo sobre um documento recém-enviado."""
+    if not limitador.permitir(_cliente(request)):
+        raise HTTPException(429, "Muitas perguntas em sequência. Aguarde um minuto.")
+    _exigir_pronto_e_orcamento()
+    try:
+        resp = await run_in_threadpool(sugerir_perguntas, dados.espaco_id, _nome_seguro(dados.arquivo))
+    except Exception as exc:
+        log.exception("Falha ao sugerir perguntas")
+        raise HTTPException(502, "Não foi possível sugerir perguntas agora.") from exc
+    if resp is None:
+        raise HTTPException(404, "Documento não encontrado.")
+    orcamento.registrar(resp.custo.custo_usd)
+    return resp
+
+
+TIPOS_ARQUIVO = {
+    ".pdf": "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".txt": "text/plain; charset=utf-8",
+    ".md": "text/plain; charset=utf-8",
+}
+
+
+@app.get("/api/documentos/arquivo", include_in_schema=False)
+def abrir_documento(espaco_id: str = Query(""), arquivo: str = Query(...), exemplo: bool = Query(False)):
+    """Serve o arquivo original para abrir na página citada (o navegador entende `#page=N` em PDFs)."""
+    nome = _nome_seguro(arquivo)
+    if exemplo:
+        pasta = settings.pdf_dir
+    else:
+        pasta = settings.upload_dir / _validar_espaco(espaco_id)
+    caminho = (pasta / nome).resolve()
+    if not caminho.is_file() or caminho.parent != pasta.resolve() or caminho.suffix.lower() not in TIPOS_ARQUIVO:
+        raise HTTPException(404, "Arquivo não encontrado. Ele pode ter sido removido ou o servidor reiniciou.")
+    return FileResponse(
+        caminho,
+        media_type=TIPOS_ARQUIVO[caminho.suffix.lower()],
+        headers={"Content-Disposition": f'inline; filename="{nome}"', "Cache-Control": "private, max-age=300"},
+    )
+
+
 @app.get("/api/documentos", response_model=DocumentosOut)
 async def listar_documentos(espaco_id: str = Query(...)) -> DocumentosOut:
     _validar_espaco(espaco_id)
@@ -133,6 +234,8 @@ async def enviar_documento(
         raise HTTPException(503, "O assistente ainda está inicializando ou mal configurado.")
     if not limitador_upload.permitir(_cliente(request)):
         raise HTTPException(429, "Muitos envios em sequência. Aguarde um minuto.")
+    if orcamento.excedido():
+        raise HTTPException(429, MENSAGEM_LIMITE)
 
     nome = _nome_seguro(arquivo.filename or "")
     ext = Path(nome).suffix.lower()
@@ -172,6 +275,8 @@ async def enviar_documento(
         raise HTTPException(500, "Não foi possível processar o documento agora. Tente novamente.") from exc
     finally:
         marcar_base_alterada()
+    # Custo aproximado dos embeddings do upload (~300 tokens por trecho de 1.200 caracteres).
+    orcamento.registrar(trechos * 300 * 0.02 / 1_000_000)
 
     return await run_in_threadpool(_listar, espaco_id, f"“{titulo}” foi lido e dividido em {trechos} trecho{'s' if trechos != 1 else ''}. Já pode perguntar!")
 
@@ -224,6 +329,7 @@ def info(request: Request):
             "max_paginas": settings.max_upload_paginas,
             "max_documentos": settings.max_documentos_por_espaco,
         },
+        "orcamento": orcamento.status(),
     }
 
 
