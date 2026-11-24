@@ -32,6 +32,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Instalar o OCR (Tesseract, como no Dockerfile)
+        run: sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr tesseract-ocr-por tesseract-ocr-eng
       - name: Instalar dependências
         run: pip install -r requirements.txt
       - name: Conferir sintaxe
