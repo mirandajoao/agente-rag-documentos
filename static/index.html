@@ -84,6 +84,21 @@
   .chip button:hover { color: var(--warn); }
   .docs-msg { font-size: 13px; color: var(--muted); min-height: 1em; }
   .docs-msg.erro { color: var(--warn); }
+  .privacidade { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: flex-start; }
+  .privacidade svg { flex: none; margin-top: 2px; }
+  .lidos { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--bg); }
+  .lidos summary { font-weight: 600; color: var(--ink); }
+  .lidos .dica { font-size: 12px; color: var(--muted); margin: 6px 0 8px; }
+  .trecho { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
+  .trecho.citado { border-color: var(--brand); box-shadow: inset 3px 0 0 var(--brand); }
+  .trecho-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--muted); }
+  .trecho-top b { color: var(--ink); font-size: 13px; }
+  .selo { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); }
+  .selo.cit { background: var(--mark); color: #0b1530; border-color: transparent; font-weight: 700; }
+  .barra { flex: 1 1 120px; display: flex; align-items: center; gap: 6px; min-width: 120px; }
+  .barra i { display: block; height: 6px; border-radius: 999px; background: var(--line); flex: 1; overflow: hidden; }
+  .barra i span { display: block; height: 100%; background: var(--brand); border-radius: 999px; }
+  .trecho p { margin: 6px 0 0; font-size: 13px; white-space: pre-wrap; max-height: 140px; overflow: auto; }
   .wrap.arrastando { outline: 3px dashed var(--brand); outline-offset: -6px; border-radius: 12px; }
 </style>
 </head>
@@ -106,6 +121,10 @@
     </div>
     <div class="chips" id="chips"></div>
     <div class="docs-msg" id="docs-msg" role="status"></div>
+    <div class="privacidade">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      <span>Não envie documentos pessoais ou sigilosos. Os arquivos ficam só no seu espaço, o texto é enviado à OpenAI para gerar as respostas e tudo é apagado quando você remove o documento ou o servidor reinicia.</span>
+    </div>
   </section>
 
   <main id="chat" aria-live="polite">
@@ -206,6 +225,45 @@ function renderResposta(r) {
     box.append(ul);
   }
   if (r.avisos && r.avisos.length) box.append(el('div', 'avisos', '⚠ ' + r.avisos.join(' ')));
+
+  // Painel "O que a IA leu": os trechos que a busca entregou ao agente.
+  if (r.trechos && r.trechos.length) {
+    const det = el('details', 'lidos');
+    det.open = true;
+    const nCit = r.trechos.filter(t => t.citado).length;
+    det.append(el('summary', '', 'O que a IA leu para responder: ' + r.trechos.length + ' trecho(s)' + (nCit ? ' · ' + nCit + ' citado(s)' : '')));
+    det.append(el('div', 'dica', 'A busca transforma a pergunta em números (embeddings) e traz os trechos mais parecidos. A IA só pode responder com o que está aqui.'));
+    // Mostra primeiro os trechos usados na resposta; o resto fica em "ver mais".
+    const ordenados = [...r.trechos].sort((x, y) => (y.citado ? 1 : 0) - (x.citado ? 1 : 0));
+    const visiveis = Math.max(3, nCit);
+    let mais = null;
+    ordenados.forEach((t, i) => {
+      const c = el('div', 'trecho' + (t.citado ? ' citado' : ''));
+      const top = el('div', 'trecho-top');
+      top.append(el('b', '', t.documento + (t.pagina ? ', p. ' + t.pagina : '')));
+      top.append(el('span', 'selo', t.origem === 'exemplo' ? 'exemplo' : 'seu documento'));
+      if (t.citado) top.append(el('span', 'selo cit', 'usado na resposta'));
+      if (t.relevancia !== null && t.relevancia !== undefined) {
+        const pct = Math.round(t.relevancia * 100);
+        const barra = el('span', 'barra');
+        barra.title = 'Semelhança com a pergunta (busca semântica)';
+        const trilho = el('i'); const cheio = el('span'); cheio.style.width = pct + '%'; trilho.append(cheio);
+        barra.append(el('span', '', 'semelhança'), trilho, el('span', '', pct + '%'));
+        top.append(barra);
+      } else {
+        top.append(el('span', 'selo', 'palavra-chave'));
+      }
+      c.append(top, el('p', '', t.texto));
+      if (i < visiveis) { det.append(c); return; }
+      if (!mais) {
+        mais = el('details');
+        mais.append(el('summary', '', 'Ver mais ' + (ordenados.length - visiveis) + ' trecho(s) que a busca trouxe'));
+        det.append(mais);
+      }
+      mais.append(c);
+    });
+    box.append(det);
+  }
 
   if (r.custo) {
     const c = r.custo;

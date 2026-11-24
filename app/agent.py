@@ -29,7 +29,7 @@ from app.config import exigir_chave_api, settings
 from app.custos import calcular_custo
 from app.guardrails import citacao_foi_recuperada, validar_pergunta
 from app.prompts import SYSTEM_PROMPT
-from app.schemas import Custo, PassoReAct, RespostaAgente, RespostaOut
+from app.schemas import Custo, PassoReAct, RespostaAgente, RespostaOut, TrechoLido
 from app.tools import FERRAMENTAS
 
 log = logging.getLogger("agente")
@@ -143,6 +143,45 @@ def interpretar_resposta_final(texto: str) -> tuple[RespostaAgente, list[str]]:
         return RespostaAgente(resposta=texto.strip() or "(sem resposta)", confianca="baixa"), avisos
 
 
+RE_CABECALHO_TRECHO = re.compile(
+    r"^\[\d+\] (?P<doc>.+?) \| página (?P<pag>\d+)(?: \| Art\. \d+)? \| relevância (?P<rel>[^|\n]+?)(?: \| origem: (?P<origem>[^\n]+))?$",
+    re.MULTILINE,
+)
+
+
+def extrair_trechos(turno: list[BaseMessage], resp: RespostaAgente) -> list[TrechoLido]:
+    """Lê os trechos devolvidos pela busca neste turno, para mostrar na interface."""
+    citados = {(c.documento, c.pagina) for c in resp.citacoes}
+    trechos: list[TrechoLido] = []
+    vistos: set[tuple[str, int, str]] = set()
+    for msg in turno:
+        if not isinstance(msg, ToolMessage) or msg.name != "buscar_documentos":
+            continue
+        for bloco in _texto(msg).split("\n\n---\n\n"):
+            m = RE_CABECALHO_TRECHO.match(bloco)
+            if not m:
+                continue
+            corpo = bloco[m.end():].strip()
+            chave = (m["doc"], int(m["pag"]), corpo[:80])
+            if chave in vistos:
+                continue
+            vistos.add(chave)
+            rel = m["rel"].strip()
+            numero = re.search(r"[-\d.]+$", rel)
+            trechos.append(
+                TrechoLido(
+                    documento=m["doc"],
+                    pagina=int(m["pag"]),
+                    relevancia=max(0.0, min(1.0, float(numero.group()))) if rel.startswith("semântica") and numero else None,
+                    tipo_busca="semântica" if rel.startswith("semântica") else "lexical",
+                    origem="exemplo" if (m["origem"] or "").strip() == "exemplo" else "usuario",
+                    texto=corpo if len(corpo) <= 700 else corpo[:697] + "...",
+                    citado=any(m["doc"] == d and (p is None or int(p) == int(m["pag"])) for d, p in citados),
+                )
+            )
+    return trechos
+
+
 RE_ARTIGO_CITADO = re.compile(r"\b(?:Art\.?|artigo)\s*(\d+)", re.IGNORECASE)
 
 
@@ -245,4 +284,5 @@ def perguntar(pergunta: str, sessao_id: str, espaco_id: str | None = None) -> Re
     for p in passos:
         log.info("[%s] %-11s %s", sessao_id, p.tipo.upper(), p.conteudo.replace("\n", " ")[:200])
 
-    return RespostaOut(sessao_id=sessao_id, passos=passos, avisos=avisos, custo=custo, **resp.model_dump())
+    trechos = extrair_trechos(turno, resp)
+    return RespostaOut(sessao_id=sessao_id, trechos=trechos, passos=passos, avisos=avisos, custo=custo, **resp.model_dump())

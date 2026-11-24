@@ -142,8 +142,8 @@ def buscar_documentos(consulta: str, pensamento: str, runtime: ToolRuntime) -> s
 
     Returns:
         Até 14 trechos numerados (primeiro os dos documentos enviados pelo usuário) no formato
-        "[n] <documento> | página <p> | relevância <r>" seguido do texto (em
-        normas jurídicas pode vir também "| Art. <a>"). Cite exatamente o
+        "[n] <documento> | página <p> | relevância <r> | origem: <enviado pelo usuário|exemplo>"
+        seguido do texto (em normas jurídicas pode vir também "| Art. <a>"). Cite exatamente o
         documento e a página informados. Se o retorno começar com
         "SEM_EVIDENCIA", os documentos NÃO tratam do assunto e você não deve
         inventar uma resposta.
@@ -172,8 +172,9 @@ def buscar_documentos(consulta: str, pensamento: str, runtime: ToolRuntime) -> s
     for i, (doc, relevancia) in enumerate(resultados, start=1):
         m = doc.metadata
         artigo = f" | Art. {m['artigo']}" if m.get("artigo") else ""
+        origem = "exemplo" if m.get("espaco") == ESPACO_EXEMPLOS else "enviado pelo usuário"
         blocos.append(
-            f"[{i}] {m.get('fonte', '?')} | página {m.get('pagina', '?')}{artigo} | relevância {relevancia}\n"
+            f"[{i}] {m.get('fonte', '?')} | página {m.get('pagina', '?')}{artigo} | relevância {relevancia} | origem: {origem}\n"
             f"{doc.page_content.strip()}"
         )
     return "\n\n---\n\n".join(blocos)

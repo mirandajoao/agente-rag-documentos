@@ -73,8 +73,21 @@ class DocumentosOut(BaseModel):
     mensagem: str = ""
 
 
+class TrechoLido(BaseModel):
+    """Trecho que a busca devolveu ao agente neste turno (painel "O que a IA leu")."""
+
+    documento: str
+    pagina: int | None = None
+    relevancia: float | None = Field(None, description="Semelhança de 0 a 1 (só na busca semântica)")
+    tipo_busca: Literal["semântica", "lexical"] = "semântica"
+    origem: Literal["usuario", "exemplo"] = "usuario"
+    texto: str = ""
+    citado: bool = False
+
+
 class RespostaOut(RespostaAgente):
     sessao_id: str
+    trechos: list[TrechoLido] = Field(default_factory=list)
     passos: list[PassoReAct] = Field(default_factory=list)
     avisos: list[str] = Field(default_factory=list)
     custo: Custo | None = None
