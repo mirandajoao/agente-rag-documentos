@@ -2,7 +2,8 @@
 
 - Modelo: OpenAI (gpt-4o-mini, padrão) ou Gemini, via app/provedor.py
 - Ferramentas: buscar_documentos, listar_documentos (filtradas pelo espaço do usuário)
-- Memória de sessão: InMemorySaver (checkpointer do LangGraph), uma thread por sessao_id
+- Memória de sessão: checkpointer do LangGraph, uma thread por sessao_id
+  (no Postgres quando há DATABASE_URL; senão, na memória do servidor — ver app/memoria.py)
 - Saída: JSON reparado com json-repair e validado com Pydantic
 """
 
@@ -20,10 +21,10 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRequest, ModelResponse, wrap_model_call
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately, trim_messages
-from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.errors import GraphRecursionError
 from pydantic import ValidationError
 
+from app import memoria
 from app.config import settings
 from app.custos import calcular_custo
 from app.guardrails import citacao_foi_recuperada, validar_pergunta
@@ -65,7 +66,7 @@ def construir_agente():
         tools=FERRAMENTAS,
         system_prompt=SYSTEM_PROMPT,
         middleware=[aparar_historico],
-        checkpointer=InMemorySaver(),
+        checkpointer=memoria.criar_checkpointer(),
     )
 
 
@@ -381,8 +382,21 @@ def perguntar(
     try:
         estado = construir_agente().invoke(entrada, config=config)
     except Exception as exc:
-        return _resposta_de_erro(exc, sessao_id)
+        if not memoria.falha_do_banco(exc):
+            return _resposta_de_erro(exc, sessao_id)
+        _trocar_para_memoria_local()
+        try:
+            estado = construir_agente().invoke(entrada, config=config)
+        except Exception as exc2:
+            return _resposta_de_erro(exc2, sessao_id)
+    memoria.registrar_uso(sessao_id)
     return _finalizar(estado["messages"], sessao_id, espaco_id)
+
+
+def _trocar_para_memoria_local() -> None:
+    """O banco da memória falhou: segue com a memória do servidor (a conversa anterior se perde)."""
+    memoria.desligar()
+    construir_agente.cache_clear()
 
 
 def perguntar_stream(
@@ -426,6 +440,13 @@ def perguntar_stream(
                     yield {"tipo": "passo", "passo": passo.model_dump()}
         estado = agente.get_state(config).values
     except Exception as exc:
+        if memoria.falha_do_banco(exc):
+            # Sem derrubar a aula: a próxima pergunta já usa a memória do servidor.
+            _trocar_para_memoria_local()
+            erro = _erro(sessao_id, "A memória da conversa ficou indisponível por um instante. Pergunte de novo, por favor.")
+            yield {"tipo": "final", "resposta": erro.model_dump()}
+            return
         yield {"tipo": "final", "resposta": _resposta_de_erro(exc, sessao_id).model_dump()}
         return
+    memoria.registrar_uso(sessao_id)
     yield {"tipo": "final", "resposta": _finalizar(estado["messages"], sessao_id, espaco_id).model_dump()}

@@ -551,7 +551,12 @@ function pintarTotal() {
 
 // A tela inicial some assim que a conversa começa.
 const inicio = document.getElementById('inicio');
-function atualizarInicio() { inicio.hidden = !!chat.querySelector('.msg'); }
+function atualizarInicio() {
+  const conversando = !!chat.querySelector('.msg');
+  inicio.hidden = conversando;
+  // A IA lembra das perguntas anteriores desta conversa; o lápis (nova conversa) começa do zero.
+  q.placeholder = conversando ? 'Continue a conversa: a IA lembra das perguntas anteriores...' : 'Pergunte algo sobre os seus documentos...';
+}
 
 // Link para abrir o arquivo original (PDFs abrem direto na página citada).
 function linkArquivo(t, pagina) {
