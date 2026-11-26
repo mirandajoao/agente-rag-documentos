@@ -78,4 +78,22 @@ with TestClient(api.app) as cli:
 with psycopg.connect(URL, autocommit=True) as c:
     resto = c.execute("SELECT count(*) FROM trechos_enviados").fetchone()[0]
 check(d.get("docs") == [] and resto == 0, "documentos com mais de 30 dias são apagados na subida")
+# Com o servidor no ar: a limpeza periódica apaga do banco, do índice e do disco o que venceu.
+e = rodar("""
+from app import acervo
+with TestClient(api.app) as cli:
+    cli.post("/api/documentos", data={"espaco_id": ESP}, files={"arquivo": ("vence.txt", b"Documento que vai vencer no prazo. " * 40, "text/plain")})
+    cli.post("/api/documentos", data={"espaco_id": ESP}, files={"arquivo": ("fica.txt", b"Documento enviado agora, dentro do prazo. " * 40, "text/plain")})
+    persistencia.esperar_gravacoes(10)
+    with persistencia._conectar() as c:
+        c.execute("UPDATE documentos_enviados SET enviado_em = enviado_em - 31 * 86400 WHERE arquivo = 'vence.txt'")
+    apagados = acervo.limpar_vencidos()
+    docs = [d["arquivo"] for d in cli.get("/api/documentos", params={"espaco_id": ESP}).json()["documentos"] if not d["exemplo"]]
+    no_disco = sorted(p.name for p in (Path(os.environ["UPLOAD_DIR"]) / ESP).glob("*"))
+    with persistencia._conectar() as c:
+        no_banco = [r[0] for r in c.execute("SELECT arquivo FROM documentos_enviados WHERE espaco = %s", (ESP,)).fetchall()]
+    print(json.dumps({"apagados": apagados, "docs": docs, "disco": no_disco, "banco": no_banco}))
+""")
+check(e.get("apagados") == 1 and e.get("docs") == ["fica.txt"], "com o servidor no ar, o documento vencido sai da lista")
+check(e.get("disco") == ["fica.txt"] and e.get("banco") == ["fica.txt"], "e sai também do disco e do banco; o que está no prazo fica")
 print("\nFALHAS:", falhas or "nenhuma")

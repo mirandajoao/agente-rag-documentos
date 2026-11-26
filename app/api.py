@@ -6,6 +6,7 @@ Railway:  uvicorn app.api:app --host 0.0.0.0 --port $PORT  (ver Dockerfile)
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import logging
@@ -70,6 +71,17 @@ STATIC = BASE_DIR / "static"
 ESTADO = {"pronto": False, "erro": None}
 
 
+async def _limpeza_periodica() -> None:
+    """A cada hora, apaga os documentos enviados que passaram do prazo de retenção."""
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            if await run_in_threadpool(acervo.limpar_vencidos):
+                marcar_base_alterada()
+        except Exception:
+            log.exception("Falha na limpeza dos documentos vencidos")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     # Banco (opcional): devolve o uso do dia, os controles e o painel salvos antes do reinício.
@@ -89,12 +101,15 @@ async def lifespan(_: FastAPI):
         except Exception:
             log.exception("Falha ao restaurar os documentos enviados; seguindo sem eles")
         construir_agente()
+        ESTADO["limpeza"] = asyncio.create_task(_limpeza_periodica())
         ESTADO["pronto"] = True
         log.info("Agente pronto (modelo=%s, embeddings=%s)", settings.chat_model, settings.embedding_model)
     except Exception as exc:  # a API sobe mesmo assim, para o /health mostrar o problema
         ESTADO["erro"] = str(exc)
         log.exception("Falha ao inicializar o agente")
     yield
+    if ESTADO.get("limpeza"):
+        ESTADO["limpeza"].cancel()
 
 
 app = FastAPI(title="Converse com os seus documentos", version="2.0.0", lifespan=lifespan)
