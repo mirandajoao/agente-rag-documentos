@@ -122,7 +122,8 @@ class Settings:
     rerank_nota_minima: int = _int("RERANK_NOTA_MINIMA", 3)
 
     # --- Documentos enviados guardados no banco (com DATABASE_URL) por até N dias ---
-    documentos_retencao_dias: int = _int("DOCUMENTOS_RETENCAO_DIAS", 30)
+    # Quem testa o app pelo link público não precisa que o arquivo fique guardado por muito tempo.
+    documentos_retencao_dias: int = _int("DOCUMENTOS_RETENCAO_DIAS", 3)
 
     # --- Caminhos ---
     pdf_dir: Path = Path(os.getenv("PDF_DIR", BASE_DIR / "data" / "pdfs"))

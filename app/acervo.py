@@ -10,7 +10,8 @@ também vai para o banco:
 
 Quando o servidor sobe, os trechos voltam para o ChromaDB com os embeddings
 salvos (sem pagar de novo pela vetorização) e os arquivos voltam para o disco.
-Documentos mais antigos que DOCUMENTOS_RETENCAO_DIAS são apagados do banco.
+Documentos mais antigos que DOCUMENTOS_RETENCAO_DIAS (3) são apagados do banco,
+do índice e do disco: na subida e, com o servidor no ar, a cada hora.
 Os de exemplo não entram: eles já vêm do repositório.
 """
 
@@ -152,3 +153,26 @@ def restaurar() -> dict:
         log.info("%d documento(s) com mais de %d dias apagados do banco", len(vencidos), settings.documentos_retencao_dias)
     log.info("Documentos enviados restaurados do banco: %d arquivo(s), %d trecho(s)", len(docs), len(linhas))
     return {"documentos": len(docs), "trechos": len(linhas)}
+
+
+def limpar_vencidos() -> int:
+    """Com o servidor no ar: apaga do banco, do índice e do disco os documentos que passaram do prazo."""
+    if not persistencia.ativo():
+        return 0
+    import shutil
+
+    from app.ingest import remover_documentos
+
+    limite = time.time() - settings.documentos_retencao_dias * 86400
+    with persistencia._conectar() as conexao:
+        vencidos = conexao.execute("SELECT espaco, arquivo FROM documentos_enviados WHERE enviado_em < %s", (limite,)).fetchall()
+    for espaco, arquivo in vencidos:
+        remover_documentos(espaco, arquivo)  # índice + banco
+        pasta = settings.upload_dir / espaco
+        (pasta / arquivo).unlink(missing_ok=True)
+        if pasta.is_dir() and not any(pasta.iterdir()):
+            shutil.rmtree(pasta, ignore_errors=True)
+    if vencidos:
+        persistencia.esperar_gravacoes(10)
+        log.info("%d documento(s) com mais de %d dias apagados", len(vencidos), settings.documentos_retencao_dias)
+    return len(vencidos)
