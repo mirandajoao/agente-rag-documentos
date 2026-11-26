@@ -135,19 +135,23 @@ class Settings:
 settings = Settings()
 
 
+class ConfiguracaoInvalida(RuntimeError):
+    """Falta a chave da API ou o provedor está errado: erro de configuração, não da pergunta."""
+
+
 def exigir_chave_api() -> None:
     """Falha cedo, com mensagem clara, se a chave não estiver configurada."""
     if settings.provedor == "gemini":
         if not settings.google_api_key:
-            raise RuntimeError(
+            raise ConfiguracaoInvalida(
                 "GOOGLE_API_KEY não configurada. Gere uma chave gratuita no Google AI Studio "
                 "(aistudio.google.com) e cadastre-a no .env ou em Variables no Railway."
             )
         return
     if settings.provedor != "openai":
-        raise RuntimeError(f"PROVEDOR_IA inválido: {settings.provedor!r}. Use 'openai' ou 'gemini'.")
+        raise ConfiguracaoInvalida(f"PROVEDOR_IA inválido: {settings.provedor!r}. Use 'openai' ou 'gemini'.")
     if not settings.openai_api_key or not settings.openai_api_key.startswith("sk-"):
-        raise RuntimeError(
+        raise ConfiguracaoInvalida(
             "OPENAI_API_KEY não configurada. Localmente, copie .env.example para .env "
             "e preencha a chave; no Railway, cadastre-a em Variables."
         )

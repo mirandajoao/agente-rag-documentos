@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import re
 import threading
+import time
 import unicodedata
 from collections import defaultdict
 from functools import lru_cache
@@ -24,7 +25,7 @@ from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.config import settings
+from app.config import ConfiguracaoInvalida, settings
 from app import rerank
 from app.ingest import ESPACO_EXEMPLOS, abrir_vectorstore, documentos_do_espaco, trechos_do_documento
 
@@ -80,7 +81,7 @@ def _filtro(espaco: str, arquivo: str = "") -> dict:
 @lru_cache(maxsize=64)
 def _bm25(espaco: str, arquivo: str, _versao_base: int) -> BM25Retriever | None:
     """Índice lexical BM25 em memória com os trechos de um espaço (ou de um só documento)."""
-    dados = _vectorstore()._collection.get(where=_filtro(espaco, arquivo), include=["documents", "metadatas"])
+    dados = _com_nova_tentativa(_vectorstore()._collection.get, where=_filtro(espaco, arquivo), include=["documents", "metadatas"])
     docs = [
         Document(page_content=t, metadata=m or {}, id=i)
         for t, m, i in zip(dados["documents"], dados["metadatas"], dados["ids"])
@@ -92,11 +93,30 @@ def _bm25(espaco: str, arquivo: str, _versao_base: int) -> BM25Retriever | None:
     return retriever
 
 
+def _com_nova_tentativa(funcao, *args, tentativas: int = 3, **kwargs):
+    """Repete uma leitura do índice que falhou por um instante.
+
+    O índice do ChromaDB (hnswlib) pode lançar RuntimeError numa consulta feita
+    enquanto outra pessoa está enviando um documento ao mesmo tempo. Na oficina,
+    isso derrubou uma pergunta; uma nova tentativa logo depois funciona.
+    """
+    for i in range(tentativas):
+        try:
+            return funcao(*args, **kwargs)
+        except ConfiguracaoInvalida:
+            raise
+        except RuntimeError:
+            if i == tentativas - 1:
+                raise
+            log.warning("Falha passageira no índice de busca; tentando de novo (%d/%d)", i + 2, tentativas)
+            time.sleep(0.3 * (i + 1))
+
+
 def _busca_vetorial(consulta: str, filtro: dict, k: int, max_distancia: float | None = None) -> list[tuple[Document, str]]:
     if k <= 0:
         return []
     limite = settings.max_distance if max_distancia is None else max_distancia
-    vetoriais = _vectorstore().similarity_search_with_score(consulta, k=k, filter=filtro)
+    vetoriais = _com_nova_tentativa(_vectorstore().similarity_search_with_score, consulta, k=k, filter=filtro)
     return [(d, f"semântica {round(1 - dist, 3)}") for d, dist in vetoriais if dist <= limite]
 
 

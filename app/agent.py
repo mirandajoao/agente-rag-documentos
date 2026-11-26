@@ -25,7 +25,7 @@ from langgraph.errors import GraphRecursionError
 from pydantic import ValidationError
 
 from app import memoria
-from app.config import settings
+from app.config import ConfiguracaoInvalida, settings
 from app.custos import calcular_custo
 from app.guardrails import citacao_foi_recuperada, validar_pergunta
 from app.prompts import SYSTEM_PROMPT
@@ -248,7 +248,9 @@ def _preparar(
 
 
 def _resposta_de_erro(exc: Exception, sessao_id: str) -> RespostaOut:
-    if isinstance(exc, RuntimeError):  # chave ausente
+    # Só o erro de configuração vira "chave ausente". Antes, qualquer RuntimeError (por exemplo,
+    # uma falha passageira do índice de busca) aparecia para o aluno como se faltasse a chave.
+    if isinstance(exc, ConfiguracaoInvalida):
         log.error("Configuração inválida: %s", exc)
         return _erro(sessao_id, "O assistente não está configurado (chave de API ausente).")
     if isinstance(exc, openai.AuthenticationError):
